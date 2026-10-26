@@ -9,7 +9,7 @@ const IMG_GAMSA="assets/img/gamsa.png";
 const IMG_WELCOME="assets/img/welcome-cem.jpg", IMG_DANCE1="assets/img/dance-procession.jpg", IMG_DANCE2="assets/img/dance-group.jpg";
 const WELCOME_ALT="Skill Karbi Anglong: Dr. Tuliram Ronghang, Hon’ble Chief Executive Member, Karbi Anglong Autonomous Council, welcomes you to Skill Karbi Anglong";
 const PH_BG={recruitment:'bg-people',skillindia:'bg-render',learn:'bg-museum',jobs:'bg-gate',courses:'bg-render',register:'bg-gate',trainer:'bg-render',track:'bg-museum',verify:'bg-gate',notices:'bg-dance2',about:'bg-dance1',contact:'bg-gate',login:'bg-museum'};
-(function(){const s=document.createElement('style');s.textContent=`.bg-gate{background-image:url(${IMG_GATE})!important}.bg-render{background-image:url(${IMG_RENDER})!important}.bg-people{background-image:url(${IMG_PEOPLE})!important}.bg-museum{background-image:url(${IMG_MUSEUM})!important}.bg-gamsa{background-image:url(${IMG_GAMSA})!important}.bg-dance1{background-image:url(${IMG_DANCE1})!important}.bg-dance2{background-image:url(${IMG_DANCE2})!important}`;document.head.appendChild(s)})();
+(function(){const s=document.createElement('style');s.textContent=`.bg-gate{background-image:url(${IMG_GATE})!important}.bg-render{background-image:url(${IMG_RENDER})!important}.bg-people{background-image:url(${IMG_PEOPLE})!important}.bg-museum{background-image:url(${IMG_MUSEUM})!important}.bg-gamsa{background-image:url(${IMG_GAMSA})!important}.bg-dance1{background-image:url(${IMG_DANCE1})!important}.bg-dance2{background-image:url(${IMG_DANCE2})!important}.sect-bg::before{background-image:url(${IMG_WELCOME})}`;document.head.appendChild(s)})();
 /* ============================== Utilities ============================== */
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -306,11 +306,7 @@ function vHome(){
       .map(([h,i,t,d,c])=>`<a class="tile" href="${h}" style="--c:${c}"><span class="ti">${ic(i)}</span><b>${t}</b><span class="d">${d}</span></a>`).join('')}
   </div>
 
-  <section class="lt-sec welcome-row"><img class="welcome-banner" src="${IMG_WELCOME}" width="1600" height="881" alt="${WELCOME_ALT}">
-    <div class="welcome-txt"><h2>Welcome to Skill Karbi Anglong</h2><p>Free, job-oriented skill training for the youth of Karbi Anglong and West Karbi Anglong, run by the ${esc(st.deptName)} of the ${esc(st.council)}.</p>
-    <div class="row"><a class="btn primary" href="#student">Apply for a course</a><a class="btn" href="#about">About the department</a></div></div></section>
-
-  <section class="lt-sec band band-soft"><div class="gamsa-deco r bg-gamsa" aria-hidden="true"></div>
+  <section class="lt-sec band band-soft sect-bg">
     <div class="sh"><h2>Explore courses by sector</h2><a href="#courses">View all ${courses.length} courses ${ic('arrow')}</a></div>
     <div class="sectors">${sectors.map((s,i)=>`<button class="sect" style="--c:${SECT_COL[i%SECT_COL.length]}" onclick="courseSector='${s.id}';go('courses')"><span class="ti">${ic(SECT_ICON[s.id]||'book')}</span><b>${esc(s.name)}</b><small>${courses.filter(c=>c.sectorId===s.id).length} courses</small></button>`).join('')}</div>
   </section>
