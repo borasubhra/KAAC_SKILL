@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Skill Development & Entrepreneurship Department · KAAC</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=Noto+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+<div class="weave" style="height:4px"></div>
+<header class="lt-head"><div class="lt-in lt-top">
+  <a class="lt-brand" href="#home" aria-label="Home"><span class="logos"><img id="embImg" class="emb" alt="State Emblem of India"><span class="vd" aria-hidden="true"></span><span class="logo-slot" id="logoSlot"></span></span><span class="lt-name"><b id="brandName">Skill Development &amp; Entrepreneurship Department</b><small id="brandSub">Karbi Anglong Autonomous Council</small></span></a>
+  <img id="diImg" class="di" alt="Digital India">
+  <button class="hamb" aria-expanded="false" aria-controls="pubnav" onclick="const n=document.querySelector('.lt-navrow');n.classList.toggle('open');this.setAttribute('aria-expanded',n.classList.contains('open'))">Menu</button>
+</div></header>
+<nav class="lt-navrow" aria-label="Main"><div class="lt-in"><div class="lt-nav" id="pubnav"><a href="#home">Home</a><a href="#courses">Courses</a><a href="#learn">Online learning</a><a href="#jobs">Jobs</a><a href="#register">Register</a><a href="#trainer">Trainers</a><a href="#track">Track status</a><a href="#verify">Verify</a><a href="#notices">Notices</a><a href="#about">About</a><a href="#contact">Contact</a><a href="#login" id="staffLink" class="navstaff">Staff login</a></div></div></nav>
+<main id="main" tabindex="-1"></main>
+<footer class="site-foot" id="siteFoot"></footer>
+
+<div class="modal" id="modal" role="dialog" aria-modal="true"><div class="box" id="modalBox"></div></div>
+<div class="toast" id="toast" role="status"></div>
+<div id="printArea"></div>
+
+<script src="assets/app.js"></script>
+</body>
+</html>
