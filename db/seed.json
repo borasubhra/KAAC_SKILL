@@ -415,7 +415,10 @@
     "notices": "Registration is open for all courses for the current session.\nCarry the printed admit card and original Aadhaar to the aptitude test.",
     "maxBatchSize": "45",
     "ackEmailText": "Keep your application number safe. You can follow your application on the portal after logging in. Please check your email regularly for updates.",
-    "selectionEmailText": "Your centre and batch will be informed shortly. Keep your original documents ready for verification when you report to the centre."
+    "selectionEmailText": "Your centre and batch will be informed shortly. Keep your original documents ready for verification when you report to the centre.",
+    "sidhTpId": "",
+    "sidhProjectId": "",
+    "sidhScheme": ""
   },
   "demoUsers": [
     {

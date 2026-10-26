@@ -117,6 +117,28 @@ automatically, with its PDF, the first time the portal starts.
 - **After applying:** trainers go through the same steps as before — the Dealing Assistant verifies documents,
   and the Training Manager empanels them and assigns them to batches.
 
+## Skill India Digital Hub (SIDH)
+
+[Skill India Digital Hub](https://www.skillindiadigital.gov.in/) is the national skilling platform of MSDE/NSDC.
+SIDH does not publish an API: integration specifications and credentials are given to onboarded training partners.
+Until the department has them, the portal records SIDH's common parameters so its data can be uploaded to SIDH or
+checked against it, and links people to SIDH.
+
+| Where | SIDH parameters recorded |
+|---|---|
+| Settings | Training Partner ID (TP ID), Project ID, scheme name on SIDH |
+| Courses | Official job role name, Qualification Pack (QP) code, Sector Skill Council — enter them from SIDH's QP listing |
+| Centres | SIDH Training Centre ID (TC ID) |
+| Batches | SIDH batch ID, entered by the Centre or Training Manager after the batch is created on SIDH |
+| Students | SIDH candidate ID (optional on the application form, can be added later by officers), religion, employment status |
+| Trainers | SIDH trainer ID (optional) |
+
+- **SIDH data sheet (Excel):** from **Batches**, per batch or for all batches — one row per trainee with the
+  identifiers above and the candidate details SIDH records. The download says which identifiers are still blank.
+- **Links:** the student application form, the student dashboard, the trainer form and Settings link to SIDH.
+- **QP code on certificates** when it has been entered for the course.
+- **Live integration later:** once NSDC/MSDE provide API access, the IDs stored here are what a sync would use.
+
 ## Email
 
 Emails are queued in the database and sent by the **worker** container, so a bulk "selected" email never

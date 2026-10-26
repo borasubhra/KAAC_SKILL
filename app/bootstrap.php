@@ -20,6 +20,12 @@ const STATUS_LABELS = [
   // Earlier version only (aptitude test step), kept so old records still show a label.
   'admit' => 'Admit card issued', 'selected' => 'Selected', 'notselected' => 'Not selected',
 ];
+/* Options as recorded on Skill India Digital Hub (SIDH). */
+const RELIGIONS = ['Hindu', 'Muslim', 'Christian', 'Sikh', 'Buddhist', 'Jain', 'Others'];
+const EMPLOYMENT_STATUSES = ['Unemployed', 'Student', 'Wage employed', 'Self-employed'];
+/** IDs issued by SIDH (candidate, trainer, training centre, batch). Their exact format is SIDH's, so only the characters are checked. */
+function valid_sidh_id(string $v): bool { return $v === '' || (bool)preg_match('#^[A-Za-z0-9/_.-]{1,40}$#', $v); }
+
 /** An application in one of these states is finished; the person may apply again. */
 const CLOSED_STATUSES = ['rejected', 'notshortlisted', 'notapproved', 'notselected', 'certified', 'failed'];
 const TSTATUS_LABELS = [

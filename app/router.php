@@ -24,7 +24,7 @@ const ROUTES = [
     'save_master' => 'h_save_master', 'remove_master' => 'h_remove_master', 'save_user' => 'h_save_user',
     'change_password' => 'h_change_password', 'save_settings' => 'h_save_settings', 'save_notice' => 'h_save_notice',
     'delete_notice' => 'h_delete_notice', 'save_ext' => 'h_save_ext', 'remove_ext' => 'h_remove_ext',
-    'save_recruitment' => 'h_save_recruitment', 'delete_recruitment' => 'h_delete_recruitment',
+    'save_recruitment' => 'h_save_recruitment', 'delete_recruitment' => 'h_delete_recruitment', 'set_sidh_id' => 'h_set_sidh_id',
   ],
 ];
 

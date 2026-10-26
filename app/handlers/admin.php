@@ -30,12 +30,16 @@ function h_save_master(array $in): array {
       $ints[$k] = (int)$v;
     }
     if ($ints['minAge'] > $ints['maxAge']) fail('Minimum age must not be more than maximum age.');
-    q('INSERT INTO courses(id, sector_id, name, nsqf, hours, min_qual, min_age, max_age, seats, active)
-       VALUES (:id,:s,:n,:nsqf,:h,:q,:mina,:maxa,:seats,:a)
+    $qp = strtoupper(str_in($d, 'qpCode', 30));
+    if ($qp !== '' && !preg_match('#^[A-Z0-9/ .-]+$#', $qp)) fail('Enter the QP code as shown on SIDH, for example ELE/Q3101.');
+    q('INSERT INTO courses(id, sector_id, name, nsqf, hours, min_qual, min_age, max_age, seats, active, job_role, qp_code, ssc)
+       VALUES (:id,:s,:n,:nsqf,:h,:q,:mina,:maxa,:seats,:a,:jr,:qp,:ssc)
        ON CONFLICT (id) DO UPDATE SET sector_id = EXCLUDED.sector_id, name = EXCLUDED.name, nsqf = EXCLUDED.nsqf, hours = EXCLUDED.hours,
-         min_qual = EXCLUDED.min_qual, min_age = EXCLUDED.min_age, max_age = EXCLUDED.max_age, seats = EXCLUDED.seats, active = EXCLUDED.active, updated_at = now()',
+         min_qual = EXCLUDED.min_qual, min_age = EXCLUDED.min_age, max_age = EXCLUDED.max_age, seats = EXCLUDED.seats, active = EXCLUDED.active,
+         job_role = EXCLUDED.job_role, qp_code = EXCLUDED.qp_code, ssc = EXCLUDED.ssc, updated_at = now()',
       [':id' => $id, ':s' => str_in($d, 'sectorId'), ':n' => $name, ':nsqf' => $ints['nsqf'], ':h' => $ints['hours'], ':q' => str_in($d, 'minQual'),
-        ':mina' => $ints['minAge'], ':maxa' => $ints['maxAge'], ':seats' => $ints['seats'], ':a' => !empty($d['active']) ? 'true' : 'false']);
+        ':mina' => $ints['minAge'], ':maxa' => $ints['maxAge'], ':seats' => $ints['seats'], ':a' => !empty($d['active']) ? 'true' : 'false',
+        ':jr' => str_in($d, 'jobRole', 200), ':qp' => $qp, ':ssc' => str_in($d, 'ssc', 200)]);
   } else {
     $sectors = array_values(array_filter((array)($d['sectors'] ?? []), fn($s) => is_string($s) && val('SELECT 1 FROM sectors WHERE id = :id', [':id' => $s])));
     if (!in_array(str_in($d, 'district'), ['Karbi Anglong', 'West Karbi Anglong'], true)) fail('Choose a district.');
@@ -44,16 +48,17 @@ function h_save_master(array $in): array {
     if (!in_array($type, ['Government institute', 'Private'], true)) fail('Choose whether the centre is a Government institute or Private.');
     $hod = $type === 'Government institute' ? str_in($d, 'hod', 150) : '';
     if ($type === 'Government institute' && $hod === '') fail('Enter the Head of Department of the Government institute.');
+    if (!valid_sidh_id(str_in($d, 'sidhTcId', 60))) fail('Check the SIDH Training Centre ID: use letters, numbers, / _ . - only.');
     $capacity = (int)($d['capacity'] ?? 0);
     if ($capacity < 1 || $capacity > 500) fail('Enter how many trainees one batch at this centre can hold (1–500).');
-    q('INSERT INTO centres(id, name, address, district, sectors, capacity, phone, active, centre_type, hod, nearby_town, facilities)
-       VALUES (:id,:n,:a,:d,:s,:c,:p,:act,:t,:h,:town,:f)
+    q('INSERT INTO centres(id, name, address, district, sectors, capacity, phone, active, centre_type, hod, nearby_town, facilities, sidh_tc_id)
+       VALUES (:id,:n,:a,:d,:s,:c,:p,:act,:t,:h,:town,:f,:tc)
        ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, address = EXCLUDED.address, district = EXCLUDED.district, sectors = EXCLUDED.sectors,
          capacity = EXCLUDED.capacity, phone = EXCLUDED.phone, active = EXCLUDED.active, centre_type = EXCLUDED.centre_type, hod = EXCLUDED.hod,
-         nearby_town = EXCLUDED.nearby_town, facilities = EXCLUDED.facilities',
+         nearby_town = EXCLUDED.nearby_town, facilities = EXCLUDED.facilities, sidh_tc_id = EXCLUDED.sidh_tc_id',
       [':id' => $id, ':n' => $name, ':a' => str_in($d, 'address', 300), ':d' => str_in($d, 'district'), ':s' => to_pg_arr($sectors),
         ':c' => $capacity, ':p' => str_in($d, 'phone', 30), ':act' => !empty($d['active']) ? 'true' : 'false', ':t' => $type, ':h' => $hod,
-        ':town' => str_in($d, 'nearbyTown', 120), ':f' => str_in($d, 'facilities', 1000)]);
+        ':town' => str_in($d, 'nearbyTown', 120), ':f' => str_in($d, 'facilities', 1000), ':tc' => str_in($d, 'sidhTcId', 40)]);
   }
   audit("master:save:$coll", $id);
   return ['ok' => true];
@@ -127,7 +132,7 @@ function h_change_password(array $in): array {
 }
 
 const SETTINGS_FIELDS = ['deptName', 'council', 'address', 'jtsName', 'jtsDesignation', 'phone', 'email', 'officeHours', 'aboutText',
-  'smsSender', 'smsGateway', 'notices', 'ackEmailText', 'selectionEmailText', 'maxBatchSize'];
+  'smsSender', 'smsGateway', 'notices', 'ackEmailText', 'selectionEmailText', 'maxBatchSize', 'sidhTpId', 'sidhProjectId', 'sidhScheme'];
 
 function h_save_settings(array $in): array {
   if ((require_staff())['role'] !== 'admin') fail('Only the administrator can change settings.', 403);

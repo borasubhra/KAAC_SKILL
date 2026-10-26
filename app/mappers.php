@@ -12,6 +12,7 @@ function map_course(array $r): array {
     'id' => $r['id'], 'sectorId' => $r['sector_id'], 'name' => $r['name'], 'nsqf' => (int)$r['nsqf'], 'hours' => (int)$r['hours'],
     'minQual' => $r['min_qual'], 'minAge' => (int)$r['min_age'], 'maxAge' => (int)$r['max_age'], 'seats' => (int)$r['seats'],
     'fee' => 'Free', 'active' => (bool)$r['active'], 'updatedAt' => iso($r['updated_at']),
+    'jobRole' => $r['job_role'], 'qpCode' => $r['qp_code'], 'ssc' => $r['ssc'],
   ];
 }
 
@@ -20,6 +21,7 @@ function map_centre(array $r): array {
     'id' => $r['id'], 'name' => $r['name'], 'address' => $r['address'], 'district' => $r['district'], 'sectors' => pg_arr($r['sectors']),
     'capacity' => (int)$r['capacity'], 'phone' => $r['phone'], 'active' => (bool)$r['active'],
     'type' => $r['centre_type'], 'hod' => $r['hod'], 'nearbyTown' => $r['nearby_town'], 'facilities' => $r['facilities'],
+    'sidhTcId' => $r['sidh_tc_id'],
   ];
 }
 
@@ -43,6 +45,7 @@ function map_student(array $r, string $photo = 'url'): array {
     'admitNo' => $r['admit_no'], 'admit' => jd($r['admit']), 'result' => jd($r['result']), 'certNo' => $r['cert_no'], 'cert' => jd($r['cert']),
     'photo' => photo_value('student', $r['id'], $r['photo_thumb'], $photo, $r['updated_at']),
     'docs' => jd($r['docs'], []), 'history' => jd($r['history'], []), 'createdAt' => iso($r['created_at']),
+    'sidhId' => $r['sidh_id'], 'religion' => $r['religion'], 'employmentStatus' => $r['employment_status'],
   ];
 }
 
@@ -53,7 +56,7 @@ function map_trainer(array $r, string $photo = 'url'): array {
     'address' => $r['address'], 'district' => $r['district'], 'pin' => $r['pin'], 'qual' => $r['qual'], 'specialisation' => $r['specialisation'],
     'indExp' => num($r['ind_exp']), 'trnExp' => num($r['trn_exp']), 'totNo' => $r['tot_no'], 'totBody' => $r['tot_body'],
     'courses' => pg_arr($r['courses']), 'sectors' => pg_arr($r['sectors']), 'prefCentres' => pg_arr($r['pref_centres']), 'status' => $r['status'],
-    'recruitmentId' => $r['recruitment_id'] ?? '',
+    'recruitmentId' => $r['recruitment_id'] ?? '', 'sidhId' => $r['sidh_id'],
     'photo' => photo_value('trainer', $r['id'], $r['photo_thumb'], $photo, $r['updated_at']),
     'docs' => jd($r['docs'], []), 'history' => jd($r['history'], []), 'empanelledAt' => iso($r['empanelled_at']), 'createdAt' => iso($r['created_at']),
   ];
@@ -70,7 +73,7 @@ function map_batch(array $r, array $studentIds): array {
     'id' => $r['id'], 'courseId' => $r['course_id'], 'centreId' => $r['centre_id'], 'start' => $r['start_date'], 'end' => $r['end_date'],
     'trainerId' => $r['trainer_id'] ?? '', 'trainer' => '', 'capacity' => (int)$r['capacity'], 'students' => $studentIds,
     'status' => $r['status'], 'trainerLog' => jd($r['trainer_log'], []), 'createdAt' => iso($r['created_at']), 'createdBy' => $r['created_by'],
-    'startedAt' => iso($r['started_at']), 'completedAt' => iso($r['completed_at']),
+    'startedAt' => iso($r['started_at']), 'completedAt' => iso($r['completed_at']), 'sidhBatchId' => $r['sidh_batch_id'],
   ];
 }
 

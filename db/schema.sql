@@ -316,3 +316,15 @@ CREATE TABLE IF NOT EXISTS recruitments (
 ALTER TABLE trainers ADD COLUMN IF NOT EXISTS recruitment_id text REFERENCES recruitments(id);
 ALTER TABLE documents DROP CONSTRAINT IF EXISTS documents_owner_type_check;
 ALTER TABLE documents ADD CONSTRAINT documents_owner_type_check CHECK (owner_type IN ('student','trainer','notice','recruitment'));
+
+/* ---------- Skill India Digital Hub (SIDH) common parameters ----------
+   Identifiers and fields SIDH records, so the portal's data can be uploaded to or reconciled with SIDH. */
+ALTER TABLE courses  ADD COLUMN IF NOT EXISTS job_role      text NOT NULL DEFAULT '';  -- official job role name
+ALTER TABLE courses  ADD COLUMN IF NOT EXISTS qp_code       text NOT NULL DEFAULT '';  -- Qualification Pack code, e.g. ELE/Q3101
+ALTER TABLE courses  ADD COLUMN IF NOT EXISTS ssc           text NOT NULL DEFAULT '';  -- Sector Skill Council
+ALTER TABLE centres  ADD COLUMN IF NOT EXISTS sidh_tc_id    text NOT NULL DEFAULT '';  -- Training Centre ID issued on SIDH
+ALTER TABLE batches  ADD COLUMN IF NOT EXISTS sidh_batch_id text NOT NULL DEFAULT '';
+ALTER TABLE students ADD COLUMN IF NOT EXISTS sidh_id       text NOT NULL DEFAULT '';  -- candidate ID on SIDH
+ALTER TABLE students ADD COLUMN IF NOT EXISTS religion      text NOT NULL DEFAULT '';
+ALTER TABLE students ADD COLUMN IF NOT EXISTS employment_status text NOT NULL DEFAULT '';
+ALTER TABLE trainers ADD COLUMN IF NOT EXISTS sidh_id       text NOT NULL DEFAULT '';  -- trainer ID on SIDH

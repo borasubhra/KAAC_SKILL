@@ -48,6 +48,11 @@ const STAGE_NOTE = {submitted:'With the Dealing Assistant for document verificat
   shortlisted:'With the Joint Secretary for approval',approved:'Selected. The Centre Manager will allot your training centre',allocated:'Centre allotted. Waiting for a batch',
   batched:'In a batch. Training starts on the batch start date',training:'Training in progress',passed:'Passed. Certificate to be issued'};
 const SELECTED_ON = ['approved','allocated','batched','training','passed','failed','certified'];
+/* Skill India Digital Hub (SIDH): the national skilling portal. Options below match what SIDH records. */
+const SIDH_URL='https://www.skillindiadigital.gov.in/';
+const RELIGIONS=['Hindu','Muslim','Christian','Sikh','Buddhist','Jain','Others'];
+const EMPLOYMENT=['Unemployed','Student','Wage employed','Self-employed'];
+const sidhLink = (text='Skill India Digital Hub') => `<a href="${SIDH_URL}" target="_blank" rel="noopener noreferrer">${text}</a>`;
 const statusTag = s => `<span class="tag ${STATUS[s]?.[1]||''}">${esc(STATUS[s]?.[0]||s)}</span>`;
 const DOC_TYPES = [
   {key:'photo',label:'Passport-size photograph',req:true,img:true},
@@ -656,7 +661,7 @@ function vCourses(){
     <section style="margin-bottom:26px">
       <h2>${esc(sectorName(sid))}</h2><p class="muted small">${esc(S.sectors[sid]?.desc||'')}</p>
       <div class="tw"><table><thead><tr><th>Skill ID</th><th>Course</th><th>NSQF</th><th>Duration</th><th>Eligibility</th><th>Seats</th><th>Offered at</th><th></th></tr></thead><tbody>
-      ${arr.map(c=>`<tr><td class="id">${esc(c.id)}</td><td>${esc(c.name)}</td><td>Level ${esc(c.nsqf)}</td><td>${c.hours} hrs<div class="small muted">≈ ${Math.max(1,Math.round(c.hours/120))} months</div></td>
+      ${arr.map(c=>`<tr><td class="id">${esc(c.id)}</td><td>${esc(c.name)}${c.qpCode?`<div class="small muted">QP ${esc(c.qpCode)}${c.ssc?' · '+esc(c.ssc):''}</div>`:''}</td><td>Level ${esc(c.nsqf)}</td><td>${c.hours} hrs<div class="small muted">≈ ${Math.max(1,Math.round(c.hours/120))} months</div></td>
         <td>${esc(c.minQual)} pass<div class="small muted">Age ${c.minAge}–${c.maxAge}</div></td><td>${c.seats}</td>
         <td class="small">${list('centres').filter(x=>x.active&&x.sectors.includes(c.sectorId)).map(x=>esc(x.name)).join(', ')||'—'}</td>
         <td><a class="btn sm primary" href="#apply/${esc(c.id)}">Apply</a></td></tr>`).join('')}
@@ -680,6 +685,7 @@ function vStudent(){
   ${justApplied?`<div class="callout" style="margin-bottom:16px"><b>Application submitted.</b> Your application number is <b>${esc(justApplied)}</b>. We have emailed it to ${esc(STU.email)}.</div>`:''}
   ${apps.length?apps.map(s=>`<section style="margin-bottom:22px">${STAGE_NOTE[s.status]?`<p class="small" style="margin:0 0 8px"><b>Where it is now:</b> ${esc(STAGE_NOTE[s.status])}</p>`:''}${trackHTML(s)}</section>`).join('')
     :'<div class="panel">You have not applied yet. Choose a trade below to start your application.</div>'}
+  <div class="panel flat row" style="justify-content:space-between;margin:8px 0 20px"><span><b>Skill India Digital Hub.</b> Your national skilling profile, courses, jobs and DigiLocker certificates are on SIDH.${apps.find(a=>a.sidhId)?` Your SIDH ID: <b>${esc(apps.find(a=>a.sidhId).sidhId)}</b>`:''}</span>${sidhLink('Open Skill India Digital Hub ↗')}</div>
   <h2 style="margin-top:28px">Schemes and trades</h2>
   <p class="muted">${open?`You can apply for another trade once application ${esc(open.id)} is closed.`:'Choose the trade you want to train in. Training is free, and every trainee who passes gets a certificate.'}</p>
   ${list('sectors').map(sec=>{const cs=list('courses').filter(c=>c.active&&c.sectorId===sec.id);return cs.length?`<section style="margin-bottom:18px"><h3>${esc(sec.name)}</h3><div class="tw"><table><thead><tr><th>Trade</th><th>Skill ID</th><th>Duration</th><th>Eligibility</th><th></th></tr></thead><tbody>
@@ -777,7 +783,12 @@ function vApply(){
       <div class="field"><label>Gender <span class="req">*</span></label><select name="gender"><option value="">Select</option><option>Female</option><option>Male</option><option>Transgender</option></select></div>
       <div class="field"><label>Category <span class="req">*</span></label><select name="category"><option value="">Select</option><option>ST (Hills)</option><option>ST (Plains)</option><option>SC</option><option>OBC/MOBC</option><option>General</option><option>EWS</option></select></div>
       <div class="field"><label>Person with disability</label><select name="pwd"><option>No</option><option>Yes</option></select></div>
+      <div class="field"><label>Religion <span class="req">*</span></label><select name="religion"><option value="">Select</option>${RELIGIONS.map(r=>`<option>${r}</option>`).join('')}</select></div>
+      <div class="field"><label>Current employment status <span class="req">*</span></label><select name="employmentStatus"><option value="">Select</option>${EMPLOYMENT.map(r=>`<option>${r}</option>`).join('')}</select></div>
     </div>
+  </fieldset>
+  <fieldset><legend>Skill India Digital Hub</legend>
+    <div class="field" style="max-width:420px"><label>SIDH candidate ID (if you have one)</label><input name="sidhId" maxlength="40" autocomplete="off"><div class="hint">Registered on ${sidhLink()}? Enter your ID so your training here is linked to your national skilling record. Not registered? You can still apply; the department will help link it.</div></div>
   </fieldset>
   <fieldset><legend>Address</legend>
     <div class="grid g3">
@@ -848,7 +859,8 @@ async function submitApplication(e){
   const problems=[];
   if(!validAadhaar(aadhaar)) problems.push('Enter a valid 12-digit Aadhaar number (the check digit does not match).');
   if(!/^[6-9]\d{9}$/.test(v('mobile'))) problems.push('Enter a valid 10-digit mobile number starting with 6–9.');
-  ['name','father','dob','gender','category','village','district','qual'].forEach(n=>{if(!v(n))problems.push('Fill in '+f[n].closest('.field').querySelector('label').childNodes[0].textContent.trim().toLowerCase()+'.')});
+  ['name','father','dob','gender','category','religion','employmentStatus','village','district','qual'].forEach(n=>{if(!v(n))problems.push('Fill in '+f[n].closest('.field').querySelector('label').childNodes[0].textContent.trim().toLowerCase()+'.')});
+  if(v('sidhId')&&!/^[A-Za-z0-9\/_.-]{1,40}$/.test(v('sidhId'))) problems.push('Check the SIDH candidate ID: use letters, numbers, / _ . - only, or leave it blank.');
   if(!/^\d{6}$/.test(v('pin'))) problems.push('Enter a 6-digit PIN code.');
   DOC_TYPES.filter(d=>d.req).forEach(d=>{if(!f['doc_'+d.key].files[0])problems.push('Upload '+d.label.toLowerCase()+'.')});
   if(!f.declare.checked) problems.push('Tick the declaration to continue.');
@@ -856,7 +868,7 @@ async function submitApplication(e){
   const btn=$('#regBtn'); btn.disabled=true; btn.textContent='Uploading documents…';
   try{
     const fd=new FormData();
-    ['mobile','name','father','mother','dob','gender','category','pwd','village','block','district','pin','qual','board','year','pct','pref1','prefCentre'].forEach(n=>fd.append(n,v(n)));
+    ['mobile','name','father','mother','dob','gender','category','pwd','religion','employmentStatus','sidhId','village','block','district','pin','qual','board','year','pct','pref1','prefCentre'].forEach(n=>fd.append(n,v(n)));
     fd.append('aadhaar',aadhaar); fd.append('declare','1');
     await addFiles(fd,f,DOC_TYPES);
     const d=await api('apply',{method:'POST',form:fd});
@@ -1104,6 +1116,8 @@ async function openApp(id){
   <div class="mb"><div class="grid g2">
     <div><div class="row" style="align-items:flex-start;margin-bottom:12px">${s.photo?`<img class="photo" src="${esc(s.photo)}" alt="">`:''}<div>${statusTag(s.status)}<div class="small muted" style="margin-top:6px">Submitted ${fmtDT(s.createdAt)}</div></div></div>
       <dl class="kv"><dt>Aadhaar</dt><dd>XXXX XXXX ${esc(s.aadhaarLast4)}</dd><dt>Father / mother</dt><dd>${esc(s.father)}${s.mother?' / '+esc(s.mother):''}</dd><dt>Date of birth</dt><dd>${fmtD(s.dob)} (age ${age(s.dob)})</dd><dt>Gender / category</dt><dd>${esc(s.gender)} · ${esc(s.category)}${s.pwd==='Yes'?' · PwD':''}</dd>
+      <dt>Religion / employment</dt><dd>${esc(s.religion||'—')} · ${esc(s.employmentStatus||'—')}</dd>
+      <dt>SIDH candidate ID</dt><dd>${sidhField('student',s.id,s.sidhId,can('dealing','supervising','centre','training'))}</dd>
       <dt>Mobile / email</dt><dd>${esc(s.mobile)}${s.email?'<br>'+esc(s.email):''}</dd><dt>Address</dt><dd>${esc([s.village,s.block,s.district,s.pin].filter(Boolean).join(', '))}</dd>
       <dt>Qualification</dt><dd>${esc(s.qual)}${s.board?', '+esc(s.board):''}${s.year?' ('+esc(s.year)+')':''}${s.pct?', '+esc(s.pct):''}</dd>
       <dt>Trade</dt><dd>${esc(courseName(s.pref1))} (${esc(s.pref1)}) ${e.ok?'<span class="tag ok">Eligible</span>':`<span class="tag warn">${esc(e.issues.join('; '))}</span>`}</dd>
@@ -1170,6 +1184,24 @@ async function downloadSelectedPdf(){
     didDrawPage:()=>{doc.setFont('helvetica','normal');doc.setFontSize(8);const p=doc.internal.getCurrentPageInfo().pageNumber;
       doc.text(`Generated on ${fmtDT(nowISO())} · Page ${p}`,W-14,doc.internal.pageSize.getHeight()-8,{align:'right'})}});
   doc.save(`selected-candidates-${today()}.pdf`);
+}
+/* SIDH data sheet: one row per trainee, with the identifiers and fields Skill India Digital Hub records,
+   for uploading to SIDH or checking records against it. */
+const SIDH_COLS=['TP ID','Project ID','Scheme','TC ID','Centre','Portal batch ID','SIDH batch ID','Batch start','Batch end','Job role','QP code','NSQF level','Sector Skill Council',
+  'Trainer','SIDH trainer ID','Application ID','SIDH candidate ID','Name','Father’s name','Gender','Date of birth','Category','Religion','Person with disability','Employment status',
+  'Highest qualification','Mobile','Email','District','PIN code','Aadhaar (last 4)','Stage','Result','Grade','Certificate no.'];
+function downloadSidhSheet(batchIds){
+  const st=settings(), rows=[];
+  batchIds.map(id=>S.batches[id]).filter(Boolean).sort((a,b)=>a.id.localeCompare(b.id)).forEach(b=>{
+    const c=S.courses[b.courseId]||{}, ce=S.centres[b.centreId]||{}, t=S.trainers[b.trainerId]||{};
+    b.students.map(x=>S.students[x]).filter(Boolean).forEach(s=>rows.push([st.sidhTpId||'',st.sidhProjectId||'',st.sidhScheme||'',ce.sidhTcId||'',ce.name||b.centreId,b.id,b.sidhBatchId||'',b.start,b.end,
+      c.jobRole||c.name||b.courseId,c.qpCode||'',c.nsqf??'',c.ssc||'',t.name||'',t.sidhId||'',s.id,s.sidhId||'',s.name,s.father,s.gender,s.dob,s.category,s.religion||'',s.pwd,s.employmentStatus||'',
+      s.qual,s.mobile,s.email,s.district,s.pin,s.aadhaarLast4,STATUS[s.status]?.[0]||s.status,s.result?.result||'',s.result?.grade||'',s.cert?.no||'']));
+  });
+  if(!rows.length){toast('There are no trainees in these batches yet.');return}
+  const missing=[!st.sidhTpId&&'Training Partner ID (Settings)',rows.some(r=>!r[3])&&'Training Centre IDs (Centres)',rows.some(r=>!r[10])&&'QP codes (Courses)',rows.some(r=>!r[6])&&'SIDH batch IDs'].filter(Boolean);
+  saveBlob(`sidh-data-sheet-${today()}.xlsx`,xlsxBlob('SIDH',[`SIDH data sheet — ${settings().deptName}`,`Generated ${fmtDT(nowISO())}`],SIDH_COLS,rows));
+  toast(missing.length?`Downloaded. Still blank: ${missing.join(', ')}.`:'SIDH data sheet downloaded.');
 }
 function loadScript(src){return new Promise((res,rej)=>{if(document.querySelector(`script[src="${src}"]`))return res();const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=()=>rej(new Error('Could not load the PDF tool. Check your connection and try again.'));document.head.appendChild(s)})}
 
@@ -1247,8 +1279,9 @@ function sBatches(){
   ${can('centre')?`<div class="panel" style="margin-bottom:18px"><h3>Allotted candidates waiting for a batch</h3>
   ${Object.keys(groups).length?`<div class="tw"><table><thead><tr><th>Centre</th><th>Trade</th><th>Waiting</th><th>Batch limit</th><th></th></tr></thead><tbody>${Object.entries(groups).map(([k,arr])=>{const [cen,cid]=k.split('|');return `<tr><td>${esc(centreName(cen))}</td><td>${esc(courseName(cid))}</td><td><b>${arr.length}</b></td><td>${batchLimit(cen)}</td><td><button class="btn sm primary" onclick="batchDialog('${esc(cid)}','${esc(cen)}')">Form batch</button></td></tr>`}).join('')}</tbody></table></div>`
     :'<p class="muted small">No one is waiting. Allot selected candidates to centres first.</p>'}</div>`:''}
+  ${bs.length?`<div class="row" style="justify-content:flex-end;margin-bottom:10px"><button class="btn" onclick="downloadSidhSheet(list('batches').map(b=>b.id))">SIDH data sheet, all batches (Excel)</button></div>`:''}
   <div class="tw"><table><thead><tr><th>Batch ID</th><th>Trade</th><th>Centre</th><th>Trainer</th><th>Dates</th><th>Trainees</th><th>Status</th><th></th></tr></thead><tbody>
-  ${bs.map(b=>`<tr><td class="id">${esc(b.id)}</td><td>${esc(courseName(b.courseId))}<div class="small muted">${esc(b.courseId)}</div></td><td>${esc(centreName(b.centreId))}<div class="small muted">${esc(b.centreId)}</div></td><td>${trainerLabel(b)}</td><td class="small">${fmtD(b.start)} – ${fmtD(b.end)}</td><td>${b.students.length}/${b.capacity}</td><td><span class="tag ${b.status==='completed'?'':'ok'}">${esc(b.status)}</span></td>
+  ${bs.map(b=>`<tr><td class="id">${esc(b.id)}${b.sidhBatchId?`<div class="small muted">SIDH ${esc(b.sidhBatchId)}</div>`:''}</td><td>${esc(courseName(b.courseId))}<div class="small muted">${esc(b.courseId)}</div></td><td>${esc(centreName(b.centreId))}<div class="small muted">${esc(b.centreId)}</div></td><td>${trainerLabel(b)}</td><td class="small">${fmtD(b.start)} – ${fmtD(b.end)}</td><td>${b.students.length}/${b.capacity}</td><td><span class="tag ${b.status==='completed'?'':'ok'}">${esc(b.status)}</span></td>
     <td class="row" style="gap:6px">${can('training')&&!b.trainerId&&b.status!=='completed'?`<button class="btn sm primary" onclick="assignDialog('${esc(b.id)}')">Assign trainer</button>`:''}<button class="btn sm" onclick="openBatch('${esc(b.id)}')">Open</button></td></tr>`).join('')||'<tr><td colspan="8" class="muted">No batches yet.</td></tr>'}
   </tbody></table></div>`;
 }
@@ -1278,9 +1311,19 @@ async function createBatch(f,course,centre,limit){
 function openBatch(id){
   const b=S.batches[id]; const st=b.students.map(x=>S.students[x]).filter(Boolean);
   openModal(`<div class="mh"><h3 style="margin:0">Batch ${esc(b.id)}</h3><button class="btn sm" onclick="closeModal()">Close</button></div>
-  <div class="mb"><dl class="kv"><dt>Skill</dt><dd>${esc(courseName(b.courseId))} (${esc(b.courseId)})</dd><dt>Centre</dt><dd>${esc(centreName(b.centreId))} (${esc(b.centreId)})</dd><dt>Dates</dt><dd>${fmtD(b.start)} – ${fmtD(b.end)}</dd><dt>Trainer</dt><dd>${trainerLabel(b)}</dd><dt>Status</dt><dd>${esc(b.status)}</dd><dt>Created by</dt><dd>${esc(b.createdBy)} on ${fmtD(b.createdAt)}</dd></dl>
+  <div class="mb"><dl class="kv"><dt>Skill</dt><dd>${esc(courseName(b.courseId))} (${esc(b.courseId)})</dd><dt>Centre</dt><dd>${esc(centreName(b.centreId))} (${esc(b.centreId)})</dd><dt>Dates</dt><dd>${fmtD(b.start)} – ${fmtD(b.end)}</dd><dt>Trainer</dt><dd>${trainerLabel(b)}</dd><dt>Status</dt><dd>${esc(b.status)}</dd><dt>Created by</dt><dd>${esc(b.createdBy)} on ${fmtD(b.createdAt)}</dd>
+  <dt>SIDH batch ID</dt><dd>${sidhField('batch',b.id,b.sidhBatchId,can('centre','training'))}</dd></dl>
   <h3 style="margin-top:16px">Trainees (${st.length})</h3><div class="tw"><table><thead><tr><th>Student ID</th><th>Name</th><th>Mobile</th><th>Status</th></tr></thead><tbody>${st.map(s=>`<tr><td class="id">${esc(s.id)}</td><td>${esc(s.name)}</td><td>${esc(s.mobile)}</td><td>${statusTag(s.status)}</td></tr>`).join('')}</tbody></table></div></div>
-  <div class="mf">${b.status!=='completed'&&can('training')?`<button class="btn" onclick="assignDialog('${id}')">${b.trainerId?'Change trainer':'Assign trainer'}</button>`:''}${b.status==='planned'&&can('training','centre')?`<button class="btn primary" onclick="startBatch('${id}')">Start training</button>`:''}<button class="btn" onclick="exportBatch('${id}')">Download list (CSV)</button></div>`,true);
+  <div class="mf">${b.status!=='completed'&&can('training')?`<button class="btn" onclick="assignDialog('${id}')">${b.trainerId?'Change trainer':'Assign trainer'}</button>`:''}${b.status==='planned'&&can('training','centre')?`<button class="btn primary" onclick="startBatch('${id}')">Start training</button>`:''}<button class="btn" onclick="exportBatch('${id}')">Download list (CSV)</button><button class="btn" onclick="downloadSidhSheet(['${esc(id)}'])">SIDH data sheet (Excel)</button></div>`,true);
+}
+/* An ID from Skill India Digital Hub, shown with a small form for officers who may record it. */
+function sidhField(kind,id,val,editable){
+  if(!editable) return val?`<span class="id">${esc(val)}</span>`:'<span class="muted">Not linked yet</span>';
+  return `<form class="row" style="gap:6px" onsubmit="event.preventDefault();saveSidhId('${kind}','${esc(id)}',this.v.value.trim(),this)"><input name="v" value="${esc(val||'')}" maxlength="40" placeholder="Not linked yet" style="max-width:200px;padding:5px 8px" aria-label="SIDH ID"><button class="btn sm">Save</button></form>`;
+}
+async function saveSidhId(kind,id,v,form){
+  if(v&&!/^[A-Za-z0-9\/_.-]{1,40}$/.test(v)){toast('Use letters, numbers, / _ . - only.');return}
+  if(await act('set_sidh_id',{kind,id,sidhId:v},v?'SIDH ID saved.':'SIDH ID removed.')) form.v.value=v;
 }
 async function startBatch(id){
   if(!S.batches[id].trainerId){toast('Assign a trainer before starting the batch.');return}
@@ -1344,6 +1387,7 @@ function vTrainerReg(){
     <div class="field"><label>Training experience (years) <span class="req">*</span></label><input name="trnExp" type="number" min="0" max="50" step="0.5"></div>
     <div class="field"><label>ToT certificate number</label><input name="totNo" placeholder="If certified"></div>
     <div class="field"><label>ToT certifying body</label><input name="totBody" placeholder="e.g. NSDC / Sector Skill Council"></div>
+    <div class="field"><label>SIDH trainer ID (if registered)</label><input name="sidhId" maxlength="40" autocomplete="off"><div class="hint">Your trainer ID on ${sidhLink()}</div></div>
   </div></fieldset>
   <fieldset><legend>Skills you can teach <span class="req">*</span></legend>
     <p class="small muted">Tick every course you are qualified to train. You are only assigned to batches of these skills.</p>
@@ -1389,7 +1433,7 @@ async function submitTrainer(e){
   const btn=$('#trBtn'); btn.disabled=true; btn.textContent='Uploading documents…';
   try{
     const fd=new FormData();
-    ['recruitmentId','mobile','email','name','father','dob','gender','address','district','pin','qual','specialisation','indExp','trnExp','totNo','totBody'].forEach(n=>fd.append(n,v(n)));
+    ['recruitmentId','mobile','email','name','father','dob','gender','address','district','pin','qual','specialisation','indExp','trnExp','totNo','totBody','sidhId'].forEach(n=>fd.append(n,v(n)));
     fd.append('aadhaar',aadhaar); fd.append('declare','1');
     skills.forEach(c=>fd.append('skill[]',c)); pcs.forEach(c=>fd.append('pc[]',c));
     await addFiles(fd,f,TRAINER_DOCS);
@@ -1454,6 +1498,7 @@ function openTrainer(id){
       <dt>Mobile / email</dt><dd>${esc(t.mobile)}<br>${esc(t.email)}</dd><dt>Address</dt><dd>${esc([t.address,t.district,t.pin].filter(Boolean).join(', '))}</dd>
       <dt>Qualification</dt><dd>${esc(t.qual)} · ${esc(t.specialisation)}</dd><dt>Experience</dt><dd>${t.indExp} yrs industry, ${t.trnExp} yrs training</dd>
       <dt>ToT certificate</dt><dd>${t.totNo?esc(t.totNo)+(t.totBody?' · '+esc(t.totBody):''):'Not certified'}</dd>
+      <dt>SIDH trainer ID</dt><dd>${sidhField('trainer',t.id,t.sidhId,can('dealing','training'))}</dd>
       ${t.empanelNo?`<dt>Empanelment no.</dt><dd>${esc(t.empanelNo)}</dd>`:''}
       <dt>Skills</dt><dd>${(t.courses||[]).map(c=>`${esc(courseName(c))} <span class="muted small">(${esc(c)})</span>`).join('<br>')}</dd>
       <dt>Preferred centres</dt><dd>${(t.prefCentres||[]).map(c=>esc(c)).join(', ')||'Any'}</dd></dl>
@@ -1606,9 +1651,9 @@ let masterTab='courses';
 function sMaster(){
   const tabs=[['courses','Courses'],['sectors','Sectors'],['centres','Centres']];
   let body='';
-  if(masterTab==='courses') body=`<div class="tw"><table><thead><tr><th>Skill ID</th><th>Course</th><th>Sector</th><th>NSQF</th><th>Hours</th><th>Min. qualification</th><th>Age</th><th>Seats</th><th>Active</th><th></th></tr></thead><tbody>${list('courses').sort((a,b)=>a.id.localeCompare(b.id)).map(c=>`<tr><td class="id">${esc(c.id)}</td><td>${esc(c.name)}</td><td>${esc(sectorName(c.sectorId))}</td><td>${c.nsqf}</td><td>${c.hours}</td><td>${esc(c.minQual)}</td><td>${c.minAge}–${c.maxAge}</td><td>${c.seats}</td><td>${c.active?'Yes':'No'}</td><td><button class="btn sm" onclick="editRec('courses','${c.id}')">Edit</button></td></tr>`).join('')}</tbody></table></div>`;
+  if(masterTab==='courses') body=`<div class="tw"><table><thead><tr><th>Skill ID</th><th>Course</th><th>Sector</th><th>QP code</th><th>NSQF</th><th>Hours</th><th>Min. qualification</th><th>Age</th><th>Seats</th><th>Active</th><th></th></tr></thead><tbody>${list('courses').sort((a,b)=>a.id.localeCompare(b.id)).map(c=>`<tr><td class="id">${esc(c.id)}</td><td>${esc(c.name)}${c.jobRole&&c.jobRole!==c.name?`<div class="small muted">${esc(c.jobRole)}</div>`:''}</td><td>${esc(sectorName(c.sectorId))}</td><td class="small">${esc(c.qpCode||'—')}</td><td>${c.nsqf}</td><td>${c.hours}</td><td>${esc(c.minQual)}</td><td>${c.minAge}–${c.maxAge}</td><td>${c.seats}</td><td>${c.active?'Yes':'No'}</td><td><button class="btn sm" onclick="editRec('courses','${c.id}')">Edit</button></td></tr>`).join('')}</tbody></table></div>`;
   if(masterTab==='sectors') body=`<div class="tw"><table><thead><tr><th>Sector ID</th><th>Name</th><th>Description</th><th>Courses</th><th></th></tr></thead><tbody>${list('sectors').map(s=>`<tr><td class="id">${esc(s.id)}</td><td>${esc(s.name)}</td><td class="small">${esc(s.desc)}</td><td>${list('courses').filter(c=>c.sectorId===s.id).length}</td><td><button class="btn sm" onclick="editRec('sectors','${s.id}')">Edit</button></td></tr>`).join('')}</tbody></table></div>`;
-  if(masterTab==='centres') body=`<div class="tw"><table><thead><tr><th>Centre ID</th><th>Name</th><th>Type</th><th>Nearby town</th><th>Sectors</th><th>Per batch</th><th>Facilities</th><th>Active</th><th></th></tr></thead><tbody>${list('centres').sort((a,b)=>a.id.localeCompare(b.id)).map(c=>`<tr><td class="id">${esc(c.id)}</td><td>${esc(c.name)}<div class="small muted">${esc(c.address)}, ${esc(c.district)}</div></td><td class="small">${esc(c.type)}${c.hod?`<div class="muted">HoD: ${esc(c.hod)}</div>`:''}</td><td class="small">${esc(c.nearbyTown||'—')}</td><td class="small">${c.sectors.map(sectorName).join(', ')}</td><td>${c.capacity}</td><td class="small">${esc(c.facilities||'—')}</td><td>${c.active?'Yes':'No'}</td><td><button class="btn sm" onclick="editRec('centres','${esc(c.id)}')">Edit</button></td></tr>`).join('')}</tbody></table></div>`;
+  if(masterTab==='centres') body=`<div class="tw"><table><thead><tr><th>Centre ID</th><th>Name</th><th>Type</th><th>Nearby town</th><th>Sectors</th><th>Per batch</th><th>Facilities</th><th>Active</th><th></th></tr></thead><tbody>${list('centres').sort((a,b)=>a.id.localeCompare(b.id)).map(c=>`<tr><td class="id">${esc(c.id)}</td><td>${esc(c.name)}<div class="small muted">${esc(c.address)}, ${esc(c.district)}</div></td><td class="small">${esc(c.type)}${c.hod?`<div class="muted">HoD: ${esc(c.hod)}</div>`:''}</td><td class="small">${esc(c.nearbyTown||'—')}${c.sidhTcId?`<div class="muted">TC ID ${esc(c.sidhTcId)}</div>`:''}</td><td class="small">${c.sectors.map(sectorName).join(', ')}</td><td>${c.capacity}</td><td class="small">${esc(c.facilities||'—')}</td><td>${c.active?'Yes':'No'}</td><td><button class="btn sm" onclick="editRec('centres','${esc(c.id)}')">Edit</button></td></tr>`).join('')}</tbody></table></div>`;
   return `<h1>Courses, sectors & centres</h1>
   <div class="row" style="margin-bottom:14px"><div class="chips">${tabs.map(([k,l])=>`<button class="chip" aria-pressed="${masterTab===k}" onclick="masterTab='${k}';render()">${l}</button>`).join('')}</div>
   <button class="btn primary" style="margin-left:auto" onclick="editRec('${masterTab}')">Add ${masterTab.slice(0,-1)}</button></div>${body}`;
@@ -1625,7 +1670,11 @@ function editRec(coll,id){
     <div class="field"><label>Minimum age</label><input name="minAge" type="number" value="${r?.minAge||18}"></div>
     <div class="field"><label>Maximum age</label><input name="maxAge" type="number" value="${r?.maxAge||35}"></div>
     <div class="field"><label>Seats per session</label><input name="seats" type="number" value="${r?.seats||30}"></div>
-    <div class="field"><label>Active</label><select name="active"><option value="1">Yes</option><option value="0" ${r&&!r.active?'selected':''}>No</option></select></div></div>`;
+    <div class="field"><label>Active</label><select name="active"><option value="1">Yes</option><option value="0" ${r&&!r.active?'selected':''}>No</option></select></div></div>
+    <h3 style="margin-top:6px">Skill India Digital Hub</h3><p class="small muted">As listed in SIDH’s Qualification Pack listing for this job role.</p>
+    <div class="grid g3"><div class="field"><label>Job role (official name)</label><input name="jobRole" value="${esc(r?.jobRole||'')}"></div>
+    <div class="field"><label>QP code</label><input name="qpCode" value="${esc(r?.qpCode||'')}" placeholder="e.g. ELE/Q3101"></div>
+    <div class="field"><label>Sector Skill Council</label><input name="ssc" value="${esc(r?.ssc||'')}" placeholder="e.g. Electronics Sector Skills Council"></div></div>`;
   if(coll==='sectors') f=`<div class="grid g2"><div class="field"><label>Sector ID</label><input name="id" value="${esc(r?.id||'')}" ${r?'readonly':''} placeholder="Short code, e.g. LOG" required></div><div class="field"><label>Name</label><input name="name" value="${esc(r?.name||'')}" required></div></div><div class="field"><label>Description</label><textarea name="desc">${esc(r?.desc||'')}</textarea></div>`;
   if(coll==='centres'){const next='KAAC-C-'+String(list('centres').length+1).padStart(3,'0');f=`<div class="grid g3">
     <div class="field"><label>Centre ID</label><input name="id" value="${esc(r?.id||next)}" ${r?'readonly':''} required><div class="hint">Unique and permanent once created</div></div>
@@ -1633,6 +1682,7 @@ function editRec(coll,id){
     <div class="field"><label>District</label><select name="district"><option ${r?.district==='Karbi Anglong'?'selected':''}>Karbi Anglong</option><option ${r?.district==='West Karbi Anglong'?'selected':''}>West Karbi Anglong</option></select></div>
     <div class="field"><label>Address</label><input name="address" value="${esc(r?.address||'')}"></div>
     <div class="field"><label>Nearby town</label><input name="nearbyTown" value="${esc(r?.nearbyTown||'')}"></div>
+    <div class="field"><label>SIDH Training Centre ID</label><input name="sidhTcId" value="${esc(r?.sidhTcId||'')}" placeholder="TC ID issued on SIDH"></div>
     <div class="field"><label>Phone</label><input name="phone" value="${esc(r?.phone||'')}"></div>
     <div class="field"><label>Type</label><select name="type" onchange="document.getElementById('hodField').hidden=this.value!=='Government institute'"><option ${r?.type!=='Private'?'selected':''}>Government institute</option><option ${r?.type==='Private'?'selected':''}>Private</option></select></div>
     <div class="field" id="hodField" ${r?.type==='Private'?'hidden':''}><label>Head of Department</label><input name="hod" value="${esc(r?.hod||'')}" placeholder="Name and designation"><div class="hint">Required for Government institutes</div></div>
@@ -1648,10 +1698,10 @@ async function saveRec(coll,f,isNew){
   const id=f.id.value.trim().toUpperCase(); if(!/^[A-Z0-9-]+$/.test(id)){toast('IDs can use letters, numbers and hyphens only.');return}
   if(isNew&&S[coll][id]){toast('That ID already exists.');return}
   const o={id};
-  if(coll==='courses') Object.assign(o,{name:f.name.value,sectorId:f.sectorId.value,nsqf:+f.nsqf.value,hours:+f.hours.value,minQual:f.minQual.value,minAge:+f.minAge.value,maxAge:+f.maxAge.value,seats:+f.seats.value,active:f.active.value==='1'});
+  if(coll==='courses') Object.assign(o,{name:f.name.value,sectorId:f.sectorId.value,nsqf:+f.nsqf.value,hours:+f.hours.value,minQual:f.minQual.value,minAge:+f.minAge.value,maxAge:+f.maxAge.value,seats:+f.seats.value,active:f.active.value==='1',jobRole:f.jobRole.value.trim(),qpCode:f.qpCode.value.trim(),ssc:f.ssc.value.trim()});
   if(coll==='sectors') Object.assign(o,{name:f.name.value,desc:f.desc.value});
   if(coll==='centres') Object.assign(o,{name:f.name.value,district:f.district.value,address:f.address.value,phone:f.phone.value,capacity:+f.capacity.value,active:f.active.value==='1',sectors:[...f.querySelectorAll('[name=sec]:checked')].map(i=>i.value),
-    type:f.type.value,hod:f.type.value==='Government institute'?f.hod.value.trim():'',nearbyTown:f.nearbyTown.value.trim(),facilities:f.facilities.value.trim()});
+    type:f.type.value,hod:f.type.value==='Government institute'?f.hod.value.trim():'',nearbyTown:f.nearbyTown.value.trim(),facilities:f.facilities.value.trim(),sidhTcId:f.sidhTcId.value.trim()});
   if(await act('save_master',{coll,isNew,data:o},'Saved.')){closeModal();render()}
 }
 async function removeRec(coll,id){
@@ -1724,6 +1774,10 @@ function sSettings(){
   <div class="field" style="max-width:260px"><label>Maximum trainees in one batch</label><input name="maxBatchSize" type="number" min="1" max="200" value="${esc(s.maxBatchSize||45)}"><div class="hint">A centre with a lower capacity takes fewer</div></div>
   <div class="field"><label>Extra message in the application acknowledgement email</label><textarea name="ackEmailText" rows="3">${esc(s.ackEmailText)}</textarea><div class="hint">Sent with the application number when a student applies</div></div>
   <div class="field"><label>Extra message in the selection email</label><textarea name="selectionEmailText" rows="3">${esc(s.selectionEmailText)}</textarea><div class="hint">Sent to every candidate the Joint Secretary approves</div></div>
+  <h3>Skill India Digital Hub</h3><p class="small muted">The department’s identifiers on ${sidhLink()}. They are included in the SIDH data sheets downloaded from Batches.</p><div class="grid g3">
+  <div class="field"><label>Training Partner ID (TP ID)</label><input name="sidhTpId" value="${esc(s.sidhTpId||'')}"></div>
+  <div class="field"><label>Project ID</label><input name="sidhProjectId" value="${esc(s.sidhProjectId||'')}"></div>
+  <div class="field"><label>Scheme name on SIDH</label><input name="sidhScheme" value="${esc(s.sidhScheme||'')}" placeholder="e.g. state scheme name"></div></div>
   <h3>Notifications</h3><p class="small muted">Email is sent through the mail server set in the server’s <code>.env</code> file (SMTP_HOST and related settings). Record the SMS gateway details here; its API keys also belong in <code>.env</code> — never put secret keys in this page.</p><div class="grid g2">
   <div class="field"><label>SMS sender ID (DLT header)</label><input name="smsSender" value="${esc(s.smsSender)}" placeholder="e.g. KAACSD"></div>
   <div class="field"><label>SMS gateway name</label><input name="smsGateway" value="${esc(s.smsGateway)}" placeholder="Leave blank if not connected"></div></div>
@@ -1798,7 +1852,7 @@ function docCert(s){
   <p style="margin-top:22px">This is to certify that</p><div class="name">${esc(s.name)}</div>
   <p>${s.gender==='Female'?'daughter':s.gender==='Male'?'son':'child'} of ${esc(s.father)}, Student ID ${esc(s.id)}, has successfully completed the training programme in</p>
   <div style="font:600 21px 'Source Serif 4',Georgia,serif;margin:4px 0">${esc(c.name||s.skillId)}</div>
-  <p>Skill ID ${esc(s.skillId)} · NSQF Level ${esc(c.nsqf||'')} · ${esc(c.hours||'')} hours<br>at ${esc(centreName(s.centreId))} (Centre ID ${esc(s.centreId)}), batch ${esc(s.batchId)}, from ${fmtD(b.start)} to ${fmtD(b.end)},<br>and has been awarded <b>Grade ${esc(s.result?.grade||'')}</b>.</p>
+  <p>Skill ID ${esc(s.skillId)}${c.qpCode?` · QP ${esc(c.qpCode)}`:''} · NSQF Level ${esc(c.nsqf||'')} · ${esc(c.hours||'')} hours<br>at ${esc(centreName(s.centreId))} (Centre ID ${esc(s.centreId)}), batch ${esc(s.batchId)}, from ${fmtD(b.start)} to ${fmtD(b.end)},<br>and has been awarded <b>Grade ${esc(s.result?.grade||'')}</b>.</p>
   <div class="sig" style="margin-top:40px"><div class="qr">${qrSVG(absUrl('#verify/'+encodeURIComponent(s.cert.no)))}<div class="small">Scan to verify on the portal</div></div>
   <div><div class="small">Date of issue: ${fmtD(s.cert.issuedAt)}</div><div class="ln">${esc(s.cert.by||'')}<br>Training Manager</div></div></div></div><div class="wv"></div></div>`;
 }

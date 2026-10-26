@@ -155,6 +155,9 @@ function h_apply(array $in): array {
     if (str_in($in, $k) === '') $p[] = "Fill in $label.";
   }
   if (str_in($in, 'category') !== '' && !in_array(str_in($in, 'category'), ['ST (Hills)', 'ST (Plains)', 'SC', 'OBC/MOBC', 'General', 'EWS'], true)) $p[] = 'Choose a category from the list.';
+  if (!in_array(str_in($in, 'religion'), RELIGIONS, true)) $p[] = 'Fill in religion.';
+  if (!in_array(str_in($in, 'employmentStatus'), EMPLOYMENT_STATUSES, true)) $p[] = 'Fill in current employment status.';
+  if (!valid_sidh_id(str_in($in, 'sidhId', 60))) $p[] = 'Check the Skill India Digital Hub ID: use letters, numbers, / _ . - only, or leave it blank.';
   foreach (STUDENT_DOCS as $k => $t) if ($t['req'] && !upload_in('doc_' . $k)) $p[] = 'Upload ' . mb_strtolower($t['label']) . '.';
   if (empty($in['declare'])) $p[] = 'Tick the declaration to continue.';
   if ($p) fail(implode("\n", $p), 422);
@@ -176,9 +179,10 @@ function h_apply(array $in): array {
       $name = str_in($in, 'name', 120);
       $history = [['at' => now_iso(), 'by' => $name, 'role' => 'Applicant', 'action' => 'Application submitted', 'remark' => '']];
       $row = one('INSERT INTO students(id, applicant_id, name, father, mother, dob, gender, category, pwd, aadhaar_last4, aadhaar_hmac, mobile, email,
-          village, block, district, pin, qual, board, pass_year, pct, pref1, pref_centre, photo_thumb, docs, history)
+          village, block, district, pin, qual, board, pass_year, pct, pref1, pref_centre, photo_thumb, docs, history, religion, employment_status, sidh_id)
         VALUES (:id,:acc,:name,:father,:mother,:dob,:gender,:category,:pwd,:l4,:hmac,:mobile,:email,:village,:block,:district,:pin,:qual,:board,:year,:pct,
-          :pref1,:pc,:thumb,:docs,:history) RETURNING *', [
+          :pref1,:pc,:thumb,:docs,:history,:religion,:emp,:sidh) RETURNING *', [
+        ':religion' => str_in($in, 'religion'), ':emp' => str_in($in, 'employmentStatus'), ':sidh' => str_in($in, 'sidhId', 40),
         ':id' => $id, ':acc' => $acc['id'], ':name' => $name, ':father' => str_in($in, 'father', 120), ':mother' => str_in($in, 'mother', 120),
         ':dob' => str_in($in, 'dob', 10), ':gender' => str_in($in, 'gender'), ':category' => str_in($in, 'category'),
         ':pwd' => str_in($in, 'pwd') === 'Yes' ? 'Yes' : 'No', ':l4' => substr($aadhaar, -4), ':hmac' => $hmac,
@@ -226,6 +230,7 @@ function h_trainer_register(array $in): array {
     $v = $in[$k] ?? '';
     if (!is_numeric($v) || $v < 0 || $v > 50) $p[] = "Enter $label experience in years (0 if none).";
   }
+  if (!valid_sidh_id(str_in($in, 'sidhId', 60))) $p[] = 'Check the Skill India Digital Hub ID: use letters, numbers, / _ . - only, or leave it blank.';
   $skills = array_values(array_unique(array_filter((array)($in['skill'] ?? []), 'is_string')));
   if (!$skills) $p[] = 'Tick at least one skill you can teach.';
   foreach (TRAINER_DOCS as $k => $t) if ($t['req'] && !upload_in('doc_' . $k)) $p[] = 'Upload ' . mb_strtolower($t['label']) . '.';
@@ -248,9 +253,10 @@ function h_trainer_register(array $in): array {
       $name = str_in($in, 'name', 120);
       $history = [['at' => now_iso(), 'by' => $name, 'role' => 'Trainer', 'action' => 'Trainer registration submitted', 'remark' => '']];
       $row = one('INSERT INTO trainers(id, name, father, dob, gender, aadhaar_last4, aadhaar_hmac, mobile, email, address, district, pin, qual,
-          specialisation, ind_exp, trn_exp, tot_no, tot_body, courses, sectors, pref_centres, photo_thumb, docs, history, recruitment_id)
+          specialisation, ind_exp, trn_exp, tot_no, tot_body, courses, sectors, pref_centres, photo_thumb, docs, history, recruitment_id, sidh_id)
         VALUES (:id,:name,:father,:dob,:gender,:l4,:hmac,:mobile,:email,:address,:district,:pin,:qual,:spec,:ie,:te,:totno,:totbody,
-          :courses,:sectors,:pcs,:thumb,:docs,:history,:rec) RETURNING *', [
+          :courses,:sectors,:pcs,:thumb,:docs,:history,:rec,:sidh) RETURNING *', [
+        ':sidh' => str_in($in, 'sidhId', 40),
         ':rec' => $rec['id'],
         ':id' => $id, ':name' => $name, ':father' => str_in($in, 'father', 120), ':dob' => str_in($in, 'dob', 10), ':gender' => str_in($in, 'gender'),
         ':l4' => substr($aadhaar, -4), ':hmac' => $hmac, ':mobile' => str_in($in, 'mobile', 10), ':email' => $email,

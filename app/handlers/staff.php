@@ -439,3 +439,28 @@ function h_student(array $in): array {
   if (!staff_may_see_owner($me, 'student', $id)) fail('Not allowed.', 403);
   return ['student' => map_student(student_row($id, false), 'inline')];
 }
+
+/* ---------- Skill India Digital Hub IDs ---------- */
+
+/**
+ * Records the ID that Skill India Digital Hub gave a candidate, trainer or batch, after the
+ * record has been created there. Each is set by the officers who deal with that record.
+ */
+function h_set_sidh_id(array $in): array {
+  $kind = str_in($in, 'kind');
+  $id = str_in($in, 'id', 60);
+  $sidh = str_in($in, 'sidhId', 60);
+  if (!valid_sidh_id($sidh)) fail('Use letters, numbers, / _ . - only.');
+  [$table, $col, $roles] = match ($kind) {
+    'student' => ['students', 'sidh_id', ['dealing', 'supervising', 'centre', 'training']],
+    'trainer' => ['trainers', 'sidh_id', ['dealing', 'training']],
+    'batch' => ['batches', 'sidh_batch_id', ['centre', 'training']],
+    default => fail('Unknown record type.'),
+  };
+  $me = require_staff(...$roles);
+  if ($kind === 'batch') own_centre_only($me, one('SELECT centre_id FROM batches WHERE id = :id', [':id' => $id]) ?? fail('Batch not found.', 404));
+  if ($kind === 'student' && !staff_may_see_owner($me, 'student', $id)) fail('Not allowed.', 403);
+  if (q("UPDATE $table SET $col = :v WHERE id = :id", [':v' => $sidh, ':id' => $id])->rowCount() === 0) fail('Record not found.', 404);
+  audit("sidh:$kind", $id, ['sidhId' => $sidh]);
+  return ['ok' => true];
+}

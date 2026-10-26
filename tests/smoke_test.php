@@ -77,15 +77,21 @@ $aad = aadhaar();
 $form = ['aadhaar' => $aad, 'mobile' => '9876543210', 'name' => 'Test Student', 'father' => 'Test Father',
   'dob' => '2000-05-10', 'gender' => 'Female', 'category' => 'ST (Hills)', 'village' => 'Diphu', 'district' => 'Karbi Anglong', 'pin' => '782460',
   'qual' => 'Class 12', 'pref1' => 'SKL-IT-01', 'prefCentre' => 'KAAC-C-001', 'declare' => '1', 'photo_thumb' => $thumb,
+  'religion' => 'Christian', 'employmentStatus' => 'Unemployed', 'sidhId' => 'SID123456789',
   'doc_photo' => $jpg(), 'doc_aadhaar' => $pdf(), 'doc_edu' => $jpg(), 'doc_prc' => $jpg()];
 $bad = $form; $bad['doc_edu'] = new CURLFile("$TMP/evil.jpg", 'image/jpeg', 'evil.jpg');
 check('a fake image is refused', req('stu', 'POST', 'apply', $bad, true)['code'] === 400);
 $bad = $form; $bad['aadhaar'] = '234567890123';
 check('an invalid Aadhaar number is refused', req('stu', 'POST', 'apply', $bad, true)['code'] === 422);
+$bad = $form; unset($bad['religion']);
+check('religion is required (SIDH parameter)', req('stu', 'POST', 'apply', $bad, true)['code'] === 422);
+$bad = $form; $bad['sidhId'] = 'bad id <x>';
+check('a malformed SIDH ID is refused', req('stu', 'POST', 'apply', $bad, true)['code'] === 422);
 $r = req('stu', 'POST', 'apply', $form, true);
 check('application is submitted', $r['code'] === 200 && preg_match('/^KAAC-SDE-\d{4}-\d{5}$/', $r['json']['student']['id'] ?? ''), $r['json']);
 $sid = $r['json']['student']['id'] ?? '';
 check('the application uses the account email', ($r['json']['student']['email'] ?? '') === $email);
+check('SIDH parameters are saved', ($r['json']['student']['sidhId'] ?? '') === 'SID123456789' && $r['json']['student']['religion'] === 'Christian' && $r['json']['student']['employmentStatus'] === 'Unemployed');
 check('no Aadhaar number or hash is returned', !str_contains($r['body'], 'hmac') && !str_contains($r['body'], $aad));
 $form2 = $form; foreach (['photo' => $jpg, 'aadhaar' => $pdf, 'edu' => $jpg, 'prc' => $jpg] as $k => $f) $form2["doc_$k"] = $f();
 $form2['aadhaar'] = aadhaar();
@@ -171,6 +177,8 @@ check('a candidate allotted elsewhere cannot join the batch', req('centre', 'POS
 $r = req('centre', 'POST', 'create_batch', ['course' => 'SKL-IT-01', 'centre' => 'KAAC-C-005', 'start' => $start, 'end' => $end, 'ids' => [$sid]]);
 check('Centre Manager forms the batch', $r['code'] === 200 && str_starts_with($r['json']['id'] ?? '', 'BAT-'), $r['json']);
 $bid = $r['json']['id'] ?? '';
+check('Centre Manager records the SIDH batch ID', req('centre', 'POST', 'set_sidh_id', ['kind' => 'batch', 'id' => $bid, 'sidhId' => 'SIDH-BATCH-778'])['code'] === 200);
+check('the Dealing Assistant cannot set a batch ID', req('dealing', 'POST', 'set_sidh_id', ['kind' => 'batch', 'id' => $bid, 'sidhId' => 'X1'])['code'] === 403);
 check('Training Manager cannot form batches any more', req('training', 'POST', 'login', ['u' => 'training', 'p' => 'Train@123'])['code'] === 200
   && req('training', 'POST', 'create_batch', ['course' => 'SKL-IT-01', 'centre' => 'KAAC-C-005', 'start' => $start, 'end' => $end, 'ids' => [$sid]])['code'] === 403);
 
@@ -253,7 +261,15 @@ $centre = ['id' => 'KAAC-C-006', 'name' => 'Baithalangso Skill Centre', 'distric
   'capacity' => 30, 'active' => true, 'sectors' => ['IT', 'AGR'], 'type' => 'Government institute', 'hod' => '', 'nearbyTown' => 'Hamren', 'facilities' => 'Computer lab'];
 check('a Government institute needs a Head of Department', req('admin', 'POST', 'save_master', ['coll' => 'centres', 'isNew' => true, 'data' => $centre])['code'] === 400);
 $centre['hod'] = 'Principal, Baithalangso ITI';
+$centre['sidhTcId'] = 'TC123456';
 check('admin adds an upcoming centre', req('admin', 'POST', 'save_master', ['coll' => 'centres', 'isNew' => true, 'data' => $centre])['code'] === 200);
+$course = array_values(array_filter(req('admin', 'GET', 'staff_data')['json']['courses'], fn($c) => $c['id'] === 'SKL-ELE-01'))[0];
+$course += []; $course['qpCode'] = 'sgj/q0101'; $course['jobRole'] = 'Solar PV Installer (Suryamitra)'; $course['ssc'] = 'Skill Council for Green Jobs';
+check('admin records the job role, QP code and Sector Skill Council', req('admin', 'POST', 'save_master', ['coll' => 'courses', 'isNew' => false, 'data' => $course])['code'] === 200);
+$c2 = array_values(array_filter(req('anon', 'GET', 'public')['json']['courses'], fn($c) => $c['id'] === 'SKL-ELE-01'))[0];
+check('QP code is stored in capitals', $c2['qpCode'] === 'SGJ/Q0101' && $c2['ssc'] === 'Skill Council for Green Jobs');
+check('admin saves the SIDH Training Partner ID', req('admin', 'POST', 'save_settings', ['sidhTpId' => 'TP000123', 'sidhProjectId' => 'PRJ-KAAC-01', 'sidhScheme' => 'KAAC Skill Development Scheme'])['code'] === 200
+  && (req('admin', 'GET', 'staff_data')['json']['settings']['sidhTpId'] ?? '') === 'TP000123');
 $c6 = array_values(array_filter(req('anon', 'GET', 'public')['json']['centres'], fn($c) => $c['id'] === 'KAAC-C-006'))[0] ?? [];
 check('centre details are saved', ($c6['type'] ?? '') === 'Government institute' && ($c6['hod'] ?? '') === 'Principal, Baithalangso ITI' && ($c6['nearbyTown'] ?? '') === 'Hamren');
 check('the Monitoring role can no longer be given', req('admin', 'POST', 'save_user', ['isNew' => true, 'id' => 'mon2', 'name' => 'M', 'role' => 'monitoring', 'pw' => 'Str0ngPassword', 'active' => true])['code'] === 400);
