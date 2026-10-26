@@ -6,7 +6,7 @@ const IMG_RENDER="assets/img/render.jpg";
 const IMG_PEOPLE="assets/img/people.jpg";
 const IMG_MUSEUM="assets/img/museum.jpg";
 const IMG_GAMSA="assets/img/gamsa.png";
-const PH_BG={recruitment:'bg-people',learn:'bg-museum',jobs:'bg-gate',courses:'bg-render',register:'bg-gate',trainer:'bg-render',track:'bg-museum',verify:'bg-gate',notices:'bg-render',about:'bg-museum',contact:'bg-gate',login:'bg-museum'};
+const PH_BG={recruitment:'bg-people',skillindia:'bg-render',learn:'bg-museum',jobs:'bg-gate',courses:'bg-render',register:'bg-gate',trainer:'bg-render',track:'bg-museum',verify:'bg-gate',notices:'bg-render',about:'bg-museum',contact:'bg-gate',login:'bg-museum'};
 (function(){const s=document.createElement('style');s.textContent=`.bg-gate{background-image:url(${IMG_GATE})!important}.bg-render{background-image:url(${IMG_RENDER})!important}.bg-people{background-image:url(${IMG_PEOPLE})!important}.bg-museum{background-image:url(${IMG_MUSEUM})!important}.bg-gamsa{background-image:url(${IMG_GAMSA})!important}`;document.head.appendChild(s)})();
 /* ============================== Utilities ============================== */
 const $ = s => document.querySelector(s);
@@ -145,7 +145,7 @@ const FORM_ROUTES=['apply','trainer'];
 let routeArg='';
 /* Navigates to a route. Setting the hash it already has fires no hashchange, so redraw directly in that case. */
 function go(r){if(location.hash==='#'+r)readHash();else location.hash=r}
-function readHash(){const h=(location.hash||'#home').slice(1);const [r,arg]=h.split('/');route=['home','about','courses','learn','jobs','student','apply','reset','recruitment','trainer','track','verify','notices','contact','login','staff'].includes(r)?r:'home';
+function readHash(){const h=(location.hash||'#home').slice(1);const [r,arg]=h.split('/');route=['home','about','courses','learn','jobs','student','apply','reset','recruitment','trainer','skillindia','track','verify','notices','contact','login','staff'].includes(r)?r:'home';
   routeArg=decodeURIComponent(arg||'');
   if(route==='apply'&&!STU){applyFor=routeArg;route='student'}
   if(route==='verify'&&arg&&decodeURIComponent(arg)!==verifyQ){verifyQ=decodeURIComponent(arg);runVerify()}
@@ -171,7 +171,7 @@ function render(){
   renderTicker();
   const m=$('#main');
   if(!LOADED){m.innerHTML=LOAD_ERROR?`<div class="panel" style="margin:40px auto;max-width:560px"><h2>The portal is not available</h2><p>${esc(LOAD_ERROR)}</p><button class="btn primary" onclick="init()">Try again</button></div>`:'<p class="muted" style="padding:60px 0;text-align:center">Loading…</p>';return}
-  m.innerHTML = ({learn:vLearn,jobs:vJobs,about:vAbout,notices:vNotices,contact:vContact,trainer:vTrainerReg,home:vHome,courses:vCourses,student:vStudent,apply:vApply,reset:vReset,track:vTrack,verify:vVerify,login:vLogin,staff:vStaff,recruitment:vRecruitment}[route]||vHome)();
+  m.innerHTML = ({learn:vLearn,jobs:vJobs,about:vAbout,notices:vNotices,contact:vContact,trainer:vTrainerReg,home:vHome,courses:vCourses,student:vStudent,apply:vApply,reset:vReset,track:vTrack,verify:vVerify,login:vLogin,staff:vStaff,recruitment:vRecruitment,skillindia:vSkillIndia}[route]||vHome)();
   if(route==='apply') wireApply();
   if(route==='trainer') wireTrainer();
 }
@@ -210,7 +210,7 @@ function renderChrome(){
   $('#siteFoot').innerHTML=`<div class="weave thin"></div><div class="ft-grid">
     <div><div class="ft-brand"><span class="logo-slot">${logo}</span><b class="h" style="margin:0">${esc(st.deptName)}</b></div>
       <p>${esc(st.council)}<br>${esc(st.address)}</p><p>${st.phone?'Helpline: '+esc(st.phone)+'<br>':''}${st.email?'Email: '+esc(st.email)+'<br>':''}${esc(st.officeHours||'')}</p></div>
-    <div><b class="h">Quick links</b><a href="#home">Home</a><a href="#about">About us</a><a href="#courses">Courses</a><a href="#learn">Online learning</a><a href="#jobs">Jobs</a><a href="#notices">Notices</a><a href="#contact">Contact us</a></div>
+    <div><b class="h">Quick links</b><a href="#home">Home</a><a href="#about">About us</a><a href="#courses">Courses</a><a href="#learn">Online learning</a><a href="#jobs">Jobs</a><a href="#skillindia">Skill India schemes</a><a href="#notices">Notices</a><a href="#contact">Contact us</a></div>
     <div><b class="h">Services</b><a href="#student">Apply online (students)</a><a href="#recruitment">Recruitment (trainers)</a><a href="#track">Track status</a><a href="#verify">Verify certificate</a><a href="#login">Staff login</a></div>
     <div><b class="h">Important links</b>${ext('https://karbianglong.co.in/','KAAC official website')}${ext('https://artpskaac.in/stipend/','Stipend for ST(H) students')}${ext('https://karbiyouthfestival.com/','Karbi Youth Festival')}${ext('https://assam.gov.in/','Assam State Portal')}${ext('https://www.skillindiadigital.gov.in/','Skill India Digital Hub')}${ext('https://www.india.gov.in/','National Portal of India')}</div>
   </div>
@@ -303,6 +303,10 @@ function vHome(){
       .map(([h,i,t,d,c])=>`<a class="tile" href="${h}" style="--c:${c}"><span class="ti">${ic(i)}</span><b>${t}</b><span class="d">${d}</span></a>`).join('')}
   </div>
 
+  <section class="lt-sec band band-si"><div class="sh"><h2>Skill India schemes for you</h2><a href="#skillindia">More about Skill India ${ic('arrow')}</a></div>
+    <p class="muted" style="margin:-6px 0 18px">National programmes of the Ministry of Skill Development &amp; Entrepreneurship, available on the Skill India Digital Hub.</p>
+    <div class="si-grid">${SI_SCHEMES.map(siCard).join('')}</div></section>
+
   ${(()=>{const fc=extCourses().filter(c=>c.featured).slice(0,3), fj=jobList().filter(j=>j.featured).slice(0,3); if(!fc.length&&!fj.length) return '';
     return `<section class="lt-sec feat"><div class="sh"><h2><span class="star" aria-hidden="true">★</span> Featured opportunities</h2><span class="small muted">Picked by the department for citizens of Karbi Anglong</span></div>
     <div class="fgrid">${fc.map(c=>`<a class="fcard course" href="${esc(c.url)}" target="_blank" rel="noopener noreferrer"><span class="ribbon">Featured course</span><span class="fkind">${ic('book')} ${esc(c.provider)} · ${esc(c.topic)}</span><b>${esc(c.title)}</b><span class="fmeta">${esc(c.duration)}</span><span class="fcost">${esc(c.cost)}</span><span class="fgo">Go to course ${ic('ext')}</span></a>`).join('')}${fj.map(j=>`<a class="fcard job" href="${esc(j.url)}" target="_blank" rel="noopener noreferrer"><span class="ribbon">Featured job</span><span class="fkind">${ic('building')} ${esc(j.employer)}</span><b>${esc(j.title)}</b><span class="fmeta">${esc(j.location)}${j.posted?' · Posted '+esc(j.posted):''}</span><span class="fcost">${esc(j.pay)}</span><span class="fgo">View on ${esc(j.source)} ${ic('ext')}</span></a>`).join('')}</div>
@@ -318,7 +322,7 @@ function vHome(){
     </div>
   </section>
 
-  <section class="lt-sec"><div class="gamsa-deco r bg-gamsa" aria-hidden="true"></div>
+  <section class="lt-sec band band-soft"><div class="gamsa-deco r bg-gamsa" aria-hidden="true"></div>
     <div class="sh"><h2>Explore courses by sector</h2><a href="#courses">View all ${courses.length} courses ${ic('arrow')}</a></div>
     <div class="sectors">${sectors.map((s,i)=>`<button class="sect" style="--c:${SECT_COL[i%SECT_COL.length]}" onclick="courseSector='${s.id}';go('courses')"><span class="ti">${ic(SECT_ICON[s.id]||'book')}</span><b>${esc(s.name)}</b><small>${courses.filter(c=>c.sectorId===s.id).length} courses</small></button>`).join('')}</div>
   </section>
@@ -338,7 +342,7 @@ function vHome(){
   <section class="lt-sec"><div class="howband"><h2>How it works</h2>
     <div class="hsteps">${steps.map(([t,d])=>`<div><b>${t}</b><span>${d}</span></div>`).join('')}</div></div></section>
 
-  <section class="lt-sec lt-cols">
+  <section class="lt-sec lt-cols band band-soft">
     <div class="card"><div class="sh"><h2>Learn AI and data science online</h2><a href="#learn">All courses ${ic('arrow')}</a></div><div class="lt-list">${extCourses().slice(0,4).map(c=>`<a href="${esc(c.url)}" target="_blank" rel="noopener noreferrer"><span class="t">${esc(c.title)}</span><small>${esc(c.provider)} · ${esc(c.cost)}</small></a>`).join('')}</div></div>
     <div class="card"><div class="sh"><h2>Recent job openings</h2><a href="#jobs">All jobs ${ic('arrow')}</a></div><div class="lt-list">${jobList().slice(0,4).map(j=>`<a href="#jobs"><span class="t">${esc(j.title)}</span><small>${esc(j.employer)} · ${esc(j.location)} · ${esc(j.pay)}</small></a>`).join('')}</div></div>
   </section>
@@ -534,6 +538,33 @@ function renderTicker(){
   box.innerHTML=`<div class="lt-in"><a class="rt-label" href="#recruitment">${ic('megaphone')}<span>Recruitment</span></a>
     <div class="rt-view" aria-label="Recruitment announcements"><div class="rt-track" style="--rt-dur:${Math.max(25,recs.length*22)}s">${items}<span aria-hidden="true" style="display:contents">${items.replace(/<a /g,'<a tabindex="-1" ')}</span></div></div></div>`;
 }
+/* ---------- Skill India (national schemes on the Skill India Digital Hub) ---------- */
+const SI_SCHEMES=[
+  {id:'pmkvy',icon:'badge',c:'#ea580c',name:'PMKVY 4.0',full:'Pradhan Mantri Kaushal Vikas Yojana 4.0',url:'https://www.skillindiadigital.gov.in/pmkvy-landing',
+   lead:'The flagship scheme of the Government of India for free, short-term skill training with a recognised certificate.',
+   points:['Short-Term Training (STT) in job-ready trades, including new-age areas such as AI, drones and green jobs','Recognition of Prior Learning (RPL) to certify skills you already have','Special Projects for groups and areas that need focused support','Enrolment, attendance, assessment and certificates are handled through the Skill India Digital Hub'],
+   cta:'Open PMKVY 4.0'},
+  {id:'navya',icon:'users',c:'#db2777',name:'NAVYA',full:'Nurturing Aspirations through Vocational Training for Young Adolescent Girls',url:'https://www.skillindiadigital.gov.in/navya/landing',
+   lead:'A joint initiative of the Ministry of Women & Child Development and the Ministry of Skill Development & Entrepreneurship, launched in June 2025.',
+   points:['For adolescent girls aged 16 to 18 who have passed at least Class 10','Short-term vocational courses under PMKVY and PM Vishwakarma','Extra modules on interpersonal skills, workplace safety and financial literacy','Started as a pilot in aspirational districts and districts of the North East'],
+   cta:'Open NAVYA'},
+  {id:'map',icon:'map',c:'#2563eb',name:'Skill India Map',full:'Find training, apprenticeships and jobs near you',url:'https://www.skillindiadigital.gov.in/skill-india-map',
+   lead:'A map on the Skill India Digital Hub that shows skilling opportunities by location.',
+   points:['Find training centres near your village or town','See apprenticeship and job opportunities in your area','Plan travel to a centre before you apply','Use it alongside the KAAC centres listed on this portal'],
+   cta:'Open Skill India Map'}];
+const siCard=x=>`<a class="si-card" href="${x.url}" target="_blank" rel="noopener noreferrer" style="--c:${x.c}"><span class="ti">${ic(x.icon)}</span><b>${esc(x.name)}</b><span class="si-full">${esc(x.full)}</span><span class="d">${esc(x.lead)}</span><span class="si-go">${esc(x.cta)} ${ic('ext')}</span></a>`;
+function vSkillIndia(){
+  return `${pageHead('Skill India','National skilling schemes on the Skill India Digital Hub (SIDH), open to the youth of Karbi Anglong alongside the courses of this department.')}
+  <div class="si-grid" style="margin-bottom:28px">${SI_SCHEMES.map(siCard).join('')}</div>
+  ${SI_SCHEMES.map(x=>`<article class="si-detail" id="si-${x.id}" style="--c:${x.c}"><div class="si-dh"><span class="ti">${ic(x.icon)}</span><div><h2>${esc(x.name)}</h2><p class="muted" style="margin:0">${esc(x.full)}</p></div></div>
+    <p>${esc(x.lead)}</p><ul>${x.points.map(t=>`<li>${esc(t)}</li>`).join('')}</ul>
+    <a class="btn primary" href="${x.url}" target="_blank" rel="noopener noreferrer">${esc(x.cta)} ${ic('ext')}</a></article>`).join('')}
+  <div class="panel" style="margin-top:8px"><h2 style="margin-top:0">How this portal works with Skill India</h2>
+    <p>Courses of this department follow national qualification packs. When you join a batch, your details are also registered on the ${sidhLink()} so that your training and certificate count nationally. Create your own SIDH profile with your Aadhaar and mobile number to see all schemes in one place.</p>
+    <div class="row"><a class="btn primary" href="#student">Apply for a KAAC course</a><a class="btn" href="${SIDH_URL}" target="_blank" rel="noopener noreferrer">Go to Skill India Digital Hub ${ic('ext')}</a></div>
+    <p class="small muted" style="margin-bottom:0">Details are a summary for guidance. The Skill India Digital Hub has the current rules, eligibility and course lists.</p></div>`;
+}
+
 function vRecruitment(){
   const recs=list('recruitments').sort((a,b)=>b.lastDate.localeCompare(a.lastDate));
   const open=recs.filter(r=>r.open), past=recs.filter(r=>!r.open);

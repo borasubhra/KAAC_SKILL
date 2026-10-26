@@ -628,3 +628,43 @@ main > .culture-img{border-radius:18px;border:1px solid var(--line);box-shadow:0
 .rec ol,.rec ul{padding-left:20px;line-height:1.7}
 .rec .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
 .rec.closed{opacity:.85}
+
+/* ===== Search suggestions sit above the quick-link cards ===== */
+.hero2{overflow:clip visible}
+.hero2-in{z-index:5}
+.hero2 .g-sug{z-index:30;max-height:min(60vh,420px);overflow-y:auto}
+
+/* ===== Main menu: bold, colourful tabs ===== */
+.lt-navrow .lt-nav{flex-wrap:wrap;gap:4px}
+.lt-navrow .lt-nav a:not(.navstaff){--c:var(--forest);font-weight:700;font-size:13.5px;color:var(--c);padding:7px 11px;border-radius:999px;
+  background:color-mix(in srgb,var(--c) 10%,transparent);border:1px solid color-mix(in srgb,var(--c) 30%,transparent);transition:background .15s,color .15s}
+.lt-navrow .lt-nav a:not(.navstaff):hover{background:color-mix(in srgb,var(--c) 20%,transparent)}
+.lt-navrow .lt-nav a:not(.navstaff)[aria-current]{background:var(--c);color:#fff;border-color:var(--c);font-weight:700}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .lt-navrow .lt-nav a:not(.navstaff):not([aria-current]){color:color-mix(in srgb,var(--c) 55%,#fff)}}
+:root[data-theme="dark"] .lt-navrow .lt-nav a:not(.navstaff):not([aria-current]){color:color-mix(in srgb,var(--c) 55%,#fff)}
+
+/* ===== Wider layout so large screens are not empty at the sides ===== */
+.lt-in,.top-in,main,footer .in,.wrap,.gf-row,.site-foot .ft-grid,.site-foot .ft-bottom{max-width:1400px}
+.lt-sec{max-width:1240px}
+.tiles{max-width:1240px}
+.band{padding-top:34px;padding-bottom:34px;margin-bottom:60px;box-shadow:0 0 0 100vmax var(--bandbg);clip-path:inset(0 -100vmax)}
+.band-soft{--bandbg:color-mix(in srgb,var(--forest) 6%,var(--paper))}
+.band-si{--bandbg:color-mix(in srgb,#ea580c 8%,var(--paper));padding-top:28px}
+.band .card{background:var(--surface)}
+
+/* ===== Skill India ===== */
+.si-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.si-card{display:flex;flex-direction:column;gap:4px;background:var(--surface);border:1px solid var(--line);border-top:5px solid var(--c);border-radius:18px;padding:22px;text-decoration:none;color:var(--ink);box-shadow:0 10px 26px var(--sh);transition:transform .15s,box-shadow .15s}
+.si-card:hover{transform:translateY(-3px);box-shadow:0 16px 32px rgba(16,40,30,.16)}
+.si-card b{font-size:19px;color:var(--c)}
+.si-card .si-full{font-weight:600;font-size:13.5px}
+.si-card .d{font-size:13.5px;color:var(--muted);margin-top:4px}
+.si-go{margin-top:auto;padding-top:12px;font-weight:700;font-size:13.5px;color:var(--c);display:inline-flex;align-items:center;gap:6px}
+.si-go svg{width:15px;height:15px}
+.si-detail{background:var(--surface);border:1px solid var(--line);border-left:6px solid var(--c);border-radius:14px;padding:22px 24px;margin-bottom:20px}
+.si-dh{display:flex;gap:14px;align-items:center;margin-bottom:10px}
+.si-dh h2{margin:0;color:var(--c)}
+.si-detail .btn svg{width:15px;height:15px}
+.si-card .ti,.si-dh .ti{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;background:color-mix(in srgb,var(--c) 15%,transparent);color:var(--c);flex:none}
+.si-card .ti{margin-bottom:8px}
+@media (max-width:820px){.si-grid{grid-template-columns:1fr}}
