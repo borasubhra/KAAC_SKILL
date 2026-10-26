@@ -1,6 +1,6 @@
 const LOGO_EMBLEM="assets/img/emblem.png";
 const LOGO_KAACLOGO="assets/img/kaac-logo.png";
-const LOGO_DIGITAL="assets/img/digital-india.png";
+const LOGO_MSDE="assets/img/msde.png", LOGO_SKILL_INDIA="assets/img/skill-india.png";
 const IMG_GATE="assets/img/gate.jpg";
 const IMG_RENDER="assets/img/render.jpg";
 const IMG_PEOPLE="assets/img/people.jpg";
@@ -201,7 +201,7 @@ const isNew = d => d && (Date.now()-new Date(d)) < 7*864e5;
 function renderChrome(){
   const st=settings(); const logo=`<img src="${esc(st.logo||LOGO_KAACLOGO)}" alt="${esc(st.council)} logo">`;
   document.body.classList.toggle('is-home',route==='home');
-  if(!$('#embImg').getAttribute('src')){$('#embImg').src=LOGO_EMBLEM;$('#diImg').src=LOGO_DIGITAL}
+  if(!$('#embImg').getAttribute('src')){$('#embImg').src=LOGO_EMBLEM}
   $('#logoSlot').innerHTML=logo;
   $('#brandName').textContent=st.deptName; $('#brandSub').textContent=st.council;
   document.querySelector('.lt-navrow').classList.remove('open'); document.querySelector('.hamb').setAttribute('aria-expanded','false');
@@ -214,6 +214,7 @@ function renderChrome(){
     <div><b class="h">Services</b><a href="#student">Apply online (students)</a><a href="#recruitment">Recruitment (trainers)</a><a href="#track">Track status</a><a href="#verify">Verify certificate</a><a href="#login">Staff login</a></div>
     <div><b class="h">Important links</b>${ext('https://karbianglong.co.in/','KAAC official website')}${ext('https://artpskaac.in/stipend/','Stipend for ST(H) students')}${ext('https://karbiyouthfestival.com/','Karbi Youth Festival')}${ext('https://assam.gov.in/','Assam State Portal')}${ext('https://www.skillindiadigital.gov.in/','Skill India Digital Hub')}${ext('https://www.india.gov.in/','National Portal of India')}</div>
   </div>
+  <div class="ft-partners">${GOV_LOGOS}</div>
   <div class="ft-bottom"><span>© ${YEAR} ${esc(st.deptName)}, ${esc(st.council)} · Last updated ${fmtD(last||nowISO())}${DEMO?' · <span id="modeNote">Development mode: demo accounts are enabled.</span>':''}</span>
     <span class="gf-tools" role="group" aria-label="Display options"><button onclick="setFs(-1)" aria-label="Smaller text">A-</button><button onclick="setFs(0)" aria-label="Normal text size">A</button><button onclick="setFs(1)" aria-label="Larger text">A+</button><button onclick="toggleTheme()" aria-label="Switch light or dark theme">◐</button></span></div>`;
 }
@@ -323,7 +324,7 @@ function vHome(){
   <section class="lt-sec"><div class="howband"><h2>How it works</h2>
     <div class="hsteps">${steps.map(([t,d])=>`<div><b>${t}</b><span>${d}</span></div>`).join('')}</div></div></section>
 
-  <section class="lt-sec band band-si"><div class="sh"><h2>Skill India schemes for you</h2><a href="#skillindia">More about Skill India ${ic('arrow')}</a></div>
+  <section class="lt-sec band band-si"><div class="sh"><h2>Skill India schemes for you</h2>${GOV_LOGOS}<a href="#skillindia">More about Skill India ${ic('arrow')}</a></div>
     <p class="muted" style="margin:-6px 0 18px">National programmes of the Ministry of Skill Development &amp; Entrepreneurship, available on the Skill India Digital Hub.</p>
     <div class="si-grid">${SI_SCHEMES.map(siCard).join('')}</div></section>
 
@@ -552,9 +553,11 @@ const SI_SCHEMES=[
    lead:'A map on the Skill India Digital Hub that shows skilling opportunities by location.',
    points:['Find training centres near your village or town','See apprenticeship and job opportunities in your area','Plan travel to a centre before you apply','Use it alongside the KAAC centres listed on this portal'],
    cta:'Open Skill India Map'}];
+const GOV_LOGOS=`<span class="gov-logos sm"><img src="${LOGO_MSDE}" alt="Ministry of Skill Development and Entrepreneurship"><span class="vd" aria-hidden="true"></span><img class="si-logo" src="${LOGO_SKILL_INDIA}" alt="Skill India"></span>`;
 const siCard=x=>`<a class="si-card" href="${x.url}" target="_blank" rel="noopener noreferrer" style="--c:${x.c}"><span class="ti">${ic(x.icon)}</span><b>${esc(x.name)}</b><span class="si-full">${esc(x.full)}</span><span class="d">${esc(x.lead)}</span><span class="si-go">${esc(x.cta)} ${ic('ext')}</span></a>`;
 function vSkillIndia(){
   return `${pageHead('Skill India','National skilling schemes on the Skill India Digital Hub (SIDH), open to the youth of Karbi Anglong alongside the courses of this department.')}
+  <div class="gov-strip">${GOV_LOGOS}<span class="small muted">Schemes of the Ministry of Skill Development &amp; Entrepreneurship, Government of India</span></div>
   <div class="si-grid" style="margin-bottom:28px">${SI_SCHEMES.map(siCard).join('')}</div>
   ${SI_SCHEMES.map(x=>`<article class="si-detail" id="si-${x.id}" style="--c:${x.c}"><div class="si-dh"><span class="ti">${ic(x.icon)}</span><div><h2>${esc(x.name)}</h2><p class="muted" style="margin:0">${esc(x.full)}</p></div></div>
     <p>${esc(x.lead)}</p><ul>${x.points.map(t=>`<li>${esc(t)}</li>`).join('')}</ul>

@@ -681,3 +681,19 @@ body.is-home .lt-navrow{box-shadow:0 3px 0 var(--saffron)}
 .sect b{overflow-wrap:anywhere}
 .lt-sec .carousel{overflow:hidden}
 .fgrid > *,.si-grid > *,.tiles > *,.gstats > *,.hsteps > *{min-width:0}
+
+/* ===== Ministry of Skill Development & Entrepreneurship and Skill India logos ===== */
+.gov-logos{display:inline-flex;align-items:center;gap:14px;flex:none}
+.gov-logos img{display:block;height:56px;width:auto}
+.gov-logos img.si-logo{height:42px}
+.gov-logos .vd{width:1px;align-self:stretch;background:var(--line)}
+.gov-logos.sm img{height:40px}.gov-logos.sm img.si-logo{height:30px}
+.sh .gov-logos{margin-left:auto;margin-right:18px}
+.gov-strip{display:flex;align-items:center;gap:18px;flex-wrap:wrap;background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px 20px;margin-bottom:22px}
+.gov-strip .small{color:#4b5563}
+.site-foot .ft-partners{max-width:1400px;margin:0 auto 18px;padding:0 20px}
+.site-foot .ft-partners .gov-logos{background:#fff;border-radius:12px;padding:10px 18px}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .lt-top .gov-logos,:root:not([data-theme="light"]) .sh .gov-logos{background:#fff;border-radius:10px;padding:4px 10px}}
+:root[data-theme="dark"] .lt-top .gov-logos,:root[data-theme="dark"] .sh .gov-logos{background:#fff;border-radius:10px;padding:4px 10px}
+@media (max-width:1020px){.lt-top .gov-logos img:first-child,.lt-top .gov-logos .vd{display:none}}
+@media (max-width:640px){.lt-top .gov-logos{display:none}.sh .gov-logos{display:none}}
