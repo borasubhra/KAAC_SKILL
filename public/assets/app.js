@@ -306,7 +306,9 @@ function vHome(){
       .map(([h,i,t,d,c])=>`<a class="tile" href="${h}" style="--c:${c}"><span class="ti">${ic(i)}</span><b>${t}</b><span class="d">${d}</span></a>`).join('')}
   </div>
 
-  <section class="lt-sec"><img class="welcome-banner" src="${IMG_WELCOME}" width="1600" height="881" alt="${WELCOME_ALT}"></section>
+  <section class="lt-sec welcome-row"><img class="welcome-banner" src="${IMG_WELCOME}" width="1600" height="881" alt="${WELCOME_ALT}">
+    <div class="welcome-txt"><h2>Welcome to Skill Karbi Anglong</h2><p>Free, job-oriented skill training for the youth of Karbi Anglong and West Karbi Anglong, run by the ${esc(st.deptName)} of the ${esc(st.council)}.</p>
+    <div class="row"><a class="btn primary" href="#student">Apply for a course</a><a class="btn" href="#about">About the department</a></div></div></section>
 
   <section class="lt-sec band band-soft"><div class="gamsa-deco r bg-gamsa" aria-hidden="true"></div>
     <div class="sh"><h2>Explore courses by sector</h2><a href="#courses">View all ${courses.length} courses ${ic('arrow')}</a></div>
@@ -499,7 +501,7 @@ function vAbout(){
   const st=settings(); const paras=(st.aboutText||'').split(/\n+/).filter(Boolean);
   const order=['jts','training','supervising','monitoring','dealing','centre'];
   const people=list('users').filter(u=>u.active&&u.role!=='admin').sort((a,b)=>order.indexOf(a.role)-order.indexOf(b.role));
-  return `${pageHead('About us')}<img class="welcome-banner" src="${IMG_WELCOME}" width="1600" height="881" alt="${WELCOME_ALT}" style="margin-bottom:26px">
+  return `${pageHead('About us')}<img class="welcome-banner small" src="${IMG_WELCOME}" width="1600" height="881" alt="${WELCOME_ALT}">
   <div class="two"><section class="about-txt">${paras.map(p=>`<p>${esc(p)}</p>`).join('')}
     <h3 style="margin-top:22px">What we do</h3>
     <ul style="padding-left:20px;line-height:1.8"><li>Free short-term skill training aligned to national standards (NSQF)</li><li>Aptitude tests, assessment and certification</li><li>On-the-job training and placement linkage with employers</li><li>Support for self-employment and small enterprises</li><li>Empanelment of qualified trainers for our centres</li></ul></section>

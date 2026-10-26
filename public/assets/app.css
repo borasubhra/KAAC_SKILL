@@ -704,3 +704,9 @@ body.is-home .lt-navrow{box-shadow:0 3px 0 var(--saffron)}
 .heritage-gallery .hg{margin:0;position:relative;aspect-ratio:3/2;border-radius:18px;overflow:hidden;background-size:cover;background-position:center;box-shadow:0 10px 26px var(--sh)}
 .heritage-gallery figcaption{position:absolute;left:0;right:0;bottom:0;padding:28px 18px 14px;color:#fff;font-weight:600;font-size:14.5px;background:linear-gradient(180deg,transparent,rgba(0,0,0,.65))}
 @media (max-width:640px){.heritage-gallery{grid-template-columns:1fr}.welcome-banner{border-radius:14px}}
+.welcome-row{display:grid;grid-template-columns:minmax(0,520px) 1fr;gap:32px;align-items:center}
+.welcome-row .welcome-banner{border-radius:16px;box-shadow:0 10px 26px var(--sh)}
+.welcome-txt h2{margin:0 0 8px;font:600 clamp(1.4rem,2.4vw,1.9rem)/1.2 "Source Serif 4",Georgia,serif}
+.welcome-txt p{color:var(--muted);margin:0 0 16px}
+.welcome-banner.small{max-width:420px;margin:0 auto 26px;border-radius:16px}
+@media (max-width:820px){.welcome-row{grid-template-columns:1fr;gap:18px}.welcome-row .welcome-banner{max-width:520px;margin:0 auto}}
