@@ -18,10 +18,6 @@ const fmtD = d => d ? new Date(d).toLocaleDateString('en-IN',{day:'2-digit',mont
 const fmtDT = d => d ? new Date(d).toLocaleString('en-IN',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
 const YEAR = new Date().getFullYear();
 function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>t.classList.remove('show'),3200)}
-async function sha256(text){
-  try{const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}
-  catch(e){let h=5381;for(const c of text)h=((h<<5)+h+c.charCodeAt(0))|0;return 'x'+(h>>>0).toString(16).padStart(8,'0')}
-}
 function age(dob){if(!dob)return 0;const d=new Date(dob),n=new Date();let a=n.getFullYear()-d.getFullYear();if(n<new Date(n.getFullYear(),d.getMonth(),d.getDate()))a--;return a}
 
 /* Aadhaar: Verhoeff checksum (UIDAI uses this for the 12th digit) */
@@ -52,169 +48,91 @@ const DOC_TYPES = [
   {key:'bank',label:'Bank passbook first page',req:false},
 ];
 
-const SEED = {
-  sectors:[
-    {id:'IT',name:'IT & ITeS',desc:'Computer operations, customer service and software basics'},
-    {id:'HOS',name:'Hospitality',desc:'Hotels, restaurants and food service'},
-    {id:'TOU',name:'Tourism',desc:'Guiding and visitor services for Karbi Anglong’s heritage and hill tourism'},
-    {id:'HLT',name:'Healthcare',desc:'Patient care and home health'},
-    {id:'CON',name:'Construction',desc:'Electrical and plumbing trades'},
-    {id:'ELE',name:'Electronics & Solar',desc:'Repair, installation and renewable energy'},
-    {id:'AUT',name:'Automotive',desc:'Vehicle servicing'},
-    {id:'AGR',name:'Agriculture & Food Processing',desc:'Organic farming, ginger, turmeric and value addition'},
-    {id:'APP',name:'Apparel & Handloom',desc:'Traditional weaving and tailoring'},
-    {id:'BWS',name:'Beauty & Wellness',desc:'Beauty and personal care services'}
-  ],
-  courses:[
-    ['SKL-IT-01','IT','Domestic Data Entry Operator',4,400,'Class 10',18,35,30],
-    ['SKL-IT-02','IT','CRM Domestic Voice',4,400,'Class 12',18,35,30],
-    ['SKL-IT-03','IT','Junior Software Developer',4,600,'Class 12',18,30,25],
-    ['SKL-HOS-01','HOS','Food & Beverage Service Steward',4,390,'Class 10',18,35,30],
-    ['SKL-HOS-02','HOS','Front Office Associate',4,450,'Class 12',18,35,25],
-    ['SKL-HOS-03','HOS','Multi Cuisine Cook',4,450,'Class 8',18,40,25],
-    ['SKL-TOU-01','TOU','Local Tour Guide',4,300,'Class 10',18,40,25],
-    ['SKL-HLT-01','HLT','General Duty Assistant',4,420,'Class 10',18,35,30],
-    ['SKL-HLT-02','HLT','Home Health Aide',4,300,'Class 8',18,40,30],
-    ['SKL-CON-01','CON','Assistant Electrician',3,360,'Class 8',18,40,30],
-    ['SKL-CON-02','CON','Plumber (General)',3,360,'Class 8',18,40,30],
-    ['SKL-ELE-01','ELE','Solar PV Installer',4,300,'Class 10',18,35,25],
-    ['SKL-ELE-02','ELE','Mobile Phone Hardware Repair Technician',4,400,'Class 10',18,35,25],
-    ['SKL-AUT-01','AUT','Two-Wheeler Service Technician',4,390,'Class 8',18,35,25],
-    ['SKL-AGR-01','AGR','Organic Grower (Ginger & Turmeric)',4,240,'Class 5',18,45,40],
-    ['SKL-AGR-02','AGR','Fruit & Vegetable Processing Technician',4,300,'Class 8',18,45,30],
-    ['SKL-APP-01','APP','Handloom Weaver (Traditional Karbi Textiles)',3,300,'Class 5',18,45,30],
-    ['SKL-APP-02','APP','Self-Employed Tailor',4,390,'Class 5',18,45,30],
-    ['SKL-BWS-01','BWS','Assistant Beauty Therapist',4,350,'Class 10',18,35,25]
-  ].map(([id,sectorId,name,nsqf,hours,minQual,minAge,maxAge,seats])=>({id,sectorId,name,nsqf,hours,minQual,minAge,maxAge,seats,fee:'Free',active:true})),
-  centres:[
-    {id:'KAAC-C-001',name:'Diphu Skill Centre',address:'Near District Library, Diphu',district:'Karbi Anglong',sectors:['IT','HOS','HLT','BWS'],capacity:240,phone:'',active:true},
-    {id:'KAAC-C-002',name:'Hamren Skill Centre',address:'Hamren Town',district:'West Karbi Anglong',sectors:['IT','CON','AGR','APP'],capacity:180,phone:'',active:true},
-    {id:'KAAC-C-003',name:'Bokajan Skill Centre',address:'Bokajan',district:'Karbi Anglong',sectors:['AUT','CON','ELE','HOS'],capacity:160,phone:'',active:true},
-    {id:'KAAC-C-004',name:'Howraghat Rural Skill Centre',address:'Howraghat',district:'Karbi Anglong',sectors:['AGR','APP','TOU','BWS'],capacity:150,phone:'',active:true},
-    {id:'KAAC-C-005',name:'Donka Skill Centre',address:'Donka, Kheroni',district:'West Karbi Anglong',sectors:['IT','ELE','HLT'],capacity:140,phone:'',active:true}
-  ],
-  users:[
-    ['admin','Admin@123','System Administrator','admin',''],
-    ['dealing','Deal@123','Arjun Teron','dealing',''],
-    ['supervising','Super@123','Monica Ingti','supervising',''],
-    ['monitoring','Monitor@123','Ramesh Timung','monitoring',''],
-    ['training','Train@123','Joseph Rongpi','training',''],
-    ['jtsecy','Jts@123','Dr. Bidyut Terang','jts',''],
-    ['centre1','Centre@123','Lily Hanse','centre','KAAC-C-001'],
-    ['centre2','Centre@123','Sarbajit Engti','centre','KAAC-C-002']
-  ],
-  settings:{id:'main',deptName:'Skill Development & Entrepreneurship Department',council:'Karbi Anglong Autonomous Council',address:'Diphu, Karbi Anglong, Assam – 782460',jtsName:'Dr. Bidyut Terang',jtsDesignation:'Joint Secretary',defaultVenue:'Diphu Skill Centre, Diphu',defaultTime:'10:00 AM',phone:'',email:'',officeHours:'10:00 AM – 4:00 PM, Monday to Friday (except holidays)',logo:'',aboutText:'The Skill Development & Entrepreneurship Department of the Karbi Anglong Autonomous Council works to give the youth of Karbi Anglong and West Karbi Anglong the skills they need for jobs and self-employment.\nThe department runs free, short-term training courses in sectors such as IT, hospitality, healthcare, construction, agriculture and traditional handloom, through skill centres across the two districts. Training follows national skill standards (NSQF), and every trainee who passes the final assessment receives a certificate that employers can verify online.\nAfter certification, the department helps trainees take the next step through on-the-job training with employers and support for starting their own small enterprises.',smsSender:'',smsGateway:'',emailFrom:'',notices:'Registration is open for all courses for the current session.\nCarry the printed admit card and original Aadhaar to the aptitude test.'}
-};
+/* Shown on the login page only when the server runs in development mode with demo accounts. */
+const DEMO_USERS = [
+  ['admin','Admin@123','admin',''],['dealing','Deal@123','dealing',''],['supervising','Super@123','supervising',''],
+  ['monitoring','Monitor@123','monitoring',''],['training','Train@123','training',''],['jtsecy','Jts@123','jts',''],
+  ['centre1','Centre@123','centre','KAAC-C-001'],['centre2','Centre@123','centre','KAAC-C-002']
+];
+/* Used until the settings arrive from the server. */
+const DEFAULT_SETTINGS = {deptName:'Skill Development & Entrepreneurship Department',council:'Karbi Anglong Autonomous Council',address:'Diphu, Karbi Anglong, Assam – 782460',jtsDesignation:'Joint Secretary'};
 
-/* ============================== Data store ==============================
-   Uses the shared artifact database when available (so applicants and officers
-   see the same records); otherwise falls back to this browser's storage. */
-const COLLS = ['students','docs','sectors','courses','centres','batches','users','notifs','ojt','settings','trainers','notices','extcourses','jobs'];
+/* ============================== Data (PHP + PostgreSQL API) ==============================
+   All records live in PostgreSQL behind api.php. The server decides what each visitor may see and do;
+   this page only displays what it is sent and asks the server to make changes. */
+const COLLS = ['students','sectors','courses','centres','batches','users','notifs','ojt','settings','trainers','notices','extcourses','jobs'];
 const S = {}; COLLS.forEach(c => S[c] = {});
-let DB = null, MODE = 'local', LKEY = 'kaac-sde-v1';
-function saveLocal(){try{localStorage.setItem(LKEY,JSON.stringify(S))}catch(e){toast('Browser storage is full. Remove old records or use smaller files.')}}
-function loadLocal(){try{const r=localStorage.getItem(LKEY);if(r){const o=JSON.parse(r);COLLS.forEach(c=>S[c]=o[c]||{});return true}}catch(e){}return false}
-async function seedObjects(){
-  const out=[];
-  SEED.sectors.forEach(x=>out.push(['sectors',x.id,x]));
-  SEED.courses.forEach(x=>out.push(['courses',x.id,x]));
-  SEED.centres.forEach(x=>out.push(['centres',x.id,x]));
-  for(const [id,pw,name,role,centreId] of SEED.users) out.push(['users',id,{id,name,role,centreId,active:true,pwHash:await sha256(id+':'+pw)}]);
-  out.push(['settings','main',SEED.settings]);
-  out.push(['notices','NT-welcome',{id:'NT-welcome',title:`Registration open for skill training courses, session ${YEAR}`,category:'Admission',date:today(),body:'Online registration is open for all courses. Apply with your Aadhaar number and scanned documents. Training is free.',active:true,createdAt:nowISO()}]);
-  return out;
-}
-async function put(coll,id,obj){
-  S[coll][id]=obj; scheduleRefresh();
-  if(DB){try{await DB.collection(coll).doc(id).set(JSON.parse(JSON.stringify(obj)))}catch(e){toast('Could not save: '+(e.message||e.code));throw e}}
-  else saveLocal();
-}
-async function del(coll,id){
-  delete S[coll][id]; scheduleRefresh();
-  if(DB){try{await DB.collection(coll).doc(id).delete()}catch(e){toast('Could not delete: '+(e.message||e.code))}}
-  else saveLocal();
-}
+const STAFF_COLLS = ['students','trainers','batches','ojt','notifs'];
+let DEMO = false, LOADED = false, LOAD_ERROR = '';
 const list = c => Object.values(S[c]);
-const settings = () => ({...SEED.settings,...(S.settings.main||{})});
+const settings = () => ({...DEFAULT_SETTINGS,...(S.settings.main||{})});
+const byId = arr => Object.fromEntries((arr||[]).map(x=>[x.id,x]));
 
-async function initStore(){
-  if(!loadLocal()){for(const [c,id,o] of await seedObjects()) S[c][id]=o; saveLocal()}
-  setMode(); render();
-  if(!window.claude || !window.claude.use) return;
-  let db=null; try{db=await window.claude.use('db')}catch(e){}
-  if(!db) return;
-  try{
-    const meta=await db.doc('meta/init').get();
-    if(!meta.exists){
-      for(const [c,id,o] of await seedObjects()) await db.collection(c).doc(id).set(o);
-      await db.doc('meta/init').set({at:nowISO()});
-    }
-  }catch(e){ return } // no write/read access: stay local
-  DB=db; MODE='shared'; COLLS.forEach(c=>S[c]={});
-  COLLS.filter(c=>c!=='docs').forEach(c=>{
-    db.collection(c).onSnapshot(snap=>{const o={};snap.docs.forEach(d=>o[d.id]=d.data());S[c]=o;scheduleRefresh()},()=>{});
-  });
-  setMode();
+class ApiError extends Error { constructor(message,status){super(message);this.status=status} }
+async function api(route,{method='GET',data,form,query}={}){
+  const opt={method,credentials:'same-origin',headers:{}};
+  if(method==='POST'){
+    opt.headers['X-KAAC']='1';
+    if(form) opt.body=form; else {opt.headers['Content-Type']='application/json';opt.body=JSON.stringify(data||{})}
+  }
+  let res;
+  try{res=await fetch('api.php?r='+route+(query?'&'+new URLSearchParams(query):''),opt)}
+  catch(e){throw new ApiError('Cannot reach the server. Check your connection and try again.',0)}
+  let body=null; try{body=await res.json()}catch(e){}
+  if(!res.ok){
+    if(res.status===401&&ME&&route!=='login') sessionEnded();
+    throw new ApiError(body?.error||`The server could not complete the request (${res.status}).`,res.status);
+  }
+  return body;
 }
-function setMode(){$('#modeNote').textContent = MODE==='shared' ? 'Records are stored in the shared portal database.' : 'Demo mode: records are stored in this browser only.'}
-async function getDocFile(id){
-  if(S.docs[id]) return S.docs[id];
-  if(DB){try{const d=await DB.collection('docs').doc(id).get();if(d.exists){S.docs[id]=d.data();return S.docs[id]}}catch(e){}}
-  return null;
+function applyData(d){
+  ['sectors','courses','centres','notices','users',...STAFF_COLLS].forEach(c=>{if(d[c]) S[c]=byId(d[c])});
+  if(d.settings) S.settings={main:d.settings};
+  if(d.ext){S.extcourses=byId(d.ext.courses);S.jobs=byId(d.ext.jobs)}
 }
+async function loadPublic(){const d=await api('public');DEMO=!!d.demo;applyData(d)}
+async function loadStaff(){const d=await api('staff_data');ME=d.me;applyData(d)}
+/** Reloads what this visitor can see, then redraws (unless someone is typing). */
+async function refresh(){
+  try{ME?await loadStaff():await loadPublic()}catch(e){if(e.status!==401)toast(e.message)}
+  scheduleRefresh();
+}
+/** Sends a staff or applicant action to the server. Returns the response, or null after showing the error. */
+async function act(route,data,okMsg,form){
+  try{const r=await api(route,{method:'POST',data,form});if(okMsg)toast(okMsg);if(ME)await refresh();return r||{}}
+  catch(e){toast(e.message);return null}
+}
+function sessionEnded(){
+  ME=null; STAFF_COLLS.forEach(c=>S[c]={});
+  closeModal(); toast('Your session has ended. Please log in again.');
+  loadPublic().catch(()=>{}).finally(()=>{route==='staff'?go('login'):render()});
+}
+setInterval(()=>{if(ME&&!document.hidden)refresh()},30000);
+document.addEventListener('visibilitychange',()=>{if(ME&&!document.hidden)refresh()});
+const docUrl = (id,download) => 'api.php?r=doc&id='+encodeURIComponent(id)+(download?'&download=1':'');
 
 /* Refresh on data change, but never while someone is typing */
 let refreshTimer=null, pendingRefresh=false;
 function scheduleRefresh(){clearTimeout(refreshTimer);refreshTimer=setTimeout(()=>{
   const a=document.activeElement;
-  if(FORM_ROUTES.includes(route) || (a && $('#main').contains(a) && a.matches('input,textarea,select'))){pendingRefresh=true;return}
+  if(FORM_ROUTES.includes(route) || $('#modal').classList.contains('open') || (a && $('#main').contains(a) && a.matches('input,textarea,select'))){pendingRefresh=true;return}
   render();
 },120)}
-document.addEventListener('focusout',()=>{if(pendingRefresh && !FORM_ROUTES.includes(route)){pendingRefresh=false;setTimeout(render,50)}});
+document.addEventListener('focusout',()=>{if(pendingRefresh && !FORM_ROUTES.includes(route) && !$('#modal').classList.contains('open')){pendingRefresh=false;setTimeout(render,50)}});
 
 /* ============================== Session & routing ============================== */
 let route='home', staffView='dash', ME=null;
 const FORM_ROUTES=['register','trainer'];
-try{const u=sessionStorage.getItem('kaac-user');if(u)ME=JSON.parse(u)}catch(e){}
 function go(r){location.hash=r}
-function readHash(){const h=(location.hash||'#home').slice(1);route=['home','about','courses','learn','jobs','register','trainer','track','verify','notices','contact','login','staff'].includes(h)?h:'home';if(route==='staff'&&!ME)route='login';render();window.scrollTo(0,0)}
+function readHash(){const h=(location.hash||'#home').slice(1);const [r,arg]=h.split('/');route=['home','about','courses','learn','jobs','register','trainer','track','verify','notices','contact','login','staff'].includes(r)?r:'home';
+  if(route==='verify'&&arg&&decodeURIComponent(arg)!==verifyQ){verifyQ=decodeURIComponent(arg);runVerify()}
+  if(route!=='track'){trackFound=null;trackPrefill=''}  // don't leave someone's details on a shared computer
+  if(route==='staff'&&!ME)route='login';render();window.scrollTo(0,0)}
 window.addEventListener('hashchange',readHash);
 const can = (...roles) => ME && (ME.role==='admin' || roles.includes(ME.role));
 const courseName = id => S.courses[id]?.name || id || '—';
 const centreName = id => S.centres[id]?.name || id || '—';
 const sectorName = id => S.sectors[id]?.name || id || '—';
-
-/* ============================== Notifications ============================== */
-const TPL = {
-  submitted: s=>`Dear ${s.name}, your application ${s.id} for ${courseName(s.pref1)} has been received by SDE Dept, KAAC. Track it on the portal with your date of birth.`,
-  returned:  (s,x)=>`Dear ${s.name}, application ${s.id} needs correction: ${x.remark||'see portal'}. Please re-upload documents on the portal.`,
-  verified:  s=>`Dear ${s.name}, documents for application ${s.id} have been verified. Your admit card will be issued shortly.`,
-  admit:     s=>`Dear ${s.name}, admit card ${s.admit?.no} is issued. Aptitude test on ${fmtD(s.admit?.date)} at ${s.admit?.time}, ${s.admit?.venue}. Download it from the portal.`,
-  selected:  s=>`Congratulations ${s.name}! You are selected for ${courseName(s.skillId||s.pref1)}. Batch details will follow.`,
-  notselected: s=>`Dear ${s.name}, you were not selected for ${courseName(s.pref1)} this session. You may apply again in the next session.`,
-  batched:   s=>{const b=S.batches[s.batchId]||{};return `Dear ${s.name}, you are allotted batch ${s.batchId} (${courseName(s.skillId)}) at ${centreName(s.centreId)} [${s.centreId}], starting ${fmtD(b.start)}.`},
-  training:  s=>`Dear ${s.name}, your training in batch ${s.batchId} has started at ${centreName(s.centreId)}.`,
-  passed:    s=>`Dear ${s.name}, you have passed the assessment for ${courseName(s.skillId)}. Your certificate will be issued soon.`,
-  failed:    s=>`Dear ${s.name}, you did not clear the assessment for ${courseName(s.skillId)}. Contact your centre for re-assessment.`,
-  certified: s=>`Dear ${s.name}, certificate ${s.cert?.no} for ${courseName(s.skillId)} is issued. Download it from the portal.`,
-  rejected:  (s,x)=>`Dear ${s.name}, application ${s.id} was not accepted. Reason: ${x.remark||'see portal'}.`,
-  ojt:       (s,x)=>`Dear ${s.name}, your OJT recommendation letter ${x.letterNo} for ${x.employer} has been signed by the Joint Secretary. Download it from the portal.`
-};
-async function notify(s,key,extra={}){
-  const body=(s.kind==='trainer'?TTPL:TPL)[key]?.(s,extra); if(!body) return;
-  const st=settings(); const at=nowISO();
-  const smsStatus = st.smsGateway ? 'Queued for gateway' : 'Logged (no SMS gateway connected)';
-  const mailStatus = st.emailFrom ? 'Queued for mail server' : 'Logged (no mail server connected)';
-  const base=Date.now().toString(36)+Math.random().toString(36).slice(2,6);
-  await put('notifs','N'+base+'s',{id:'N'+base+'s',at,studentId:s.id,channel:'SMS',to:'+91 '+s.mobile,body,status:smsStatus,event:key});
-  if(s.email) await put('notifs','N'+base+'e',{id:'N'+base+'e',at,studentId:s.id,channel:'Email',to:s.email,subject:'SDE Dept, KAAC: '+(extra.subject||((s.kind==='trainer'?TSTATUS:STATUS)[key]||[])[0]||'Update'),body,status:mailStatus,event:key});
-}
-async function setStatus(s,status,action,remark='',patch={},notifyKey=status){
-  const ns={...s,...patch,status,history:[...(s.history||[]),{at:nowISO(),by:ME?ME.name:'Applicant',role:ME?ROLES[ME.role]:'Applicant',action,remark}]};
-  await put('students',s.id,ns);
-  if(notifyKey) await notify(ns,notifyKey,{remark});
-  return ns;
-}
 
 /* ============================== Render ============================== */
 function render(){
@@ -225,6 +143,7 @@ function render(){
   $('#staffLink').textContent = ME ? 'Staff area' : 'Staff login';
   $('#staffLink').setAttribute('href', ME ? '#staff' : '#login');
   const m=$('#main');
+  if(!LOADED){m.innerHTML=LOAD_ERROR?`<div class="panel" style="margin:40px auto;max-width:560px"><h2>The portal is not available</h2><p>${esc(LOAD_ERROR)}</p><button class="btn primary" onclick="init()">Try again</button></div>`:'<p class="muted" style="padding:60px 0;text-align:center">Loading…</p>';return}
   m.innerHTML = ({learn:vLearn,jobs:vJobs,about:vAbout,notices:vNotices,contact:vContact,trainer:vTrainerReg,home:vHome,courses:vCourses,register:vRegister,track:vTrack,verify:vVerify,login:vLogin,staff:vStaff}[route]||vHome)();
   if(route==='register') wireRegister();
   if(route==='trainer') wireTrainer();
@@ -253,7 +172,7 @@ const isNew = d => d && (Date.now()-new Date(d)) < 7*864e5;
 
 /* Header and footer are refreshed on every render */
 function renderChrome(){
-  const st=settings(); const logo=`<img src="${st.logo||LOGO_KAACLOGO}" alt="${esc(st.council)} logo">`;
+  const st=settings(); const logo=`<img src="${esc(st.logo||LOGO_KAACLOGO)}" alt="${esc(st.council)} logo">`;
   document.body.classList.toggle('is-home',route==='home');
   if(!$('#embImg').getAttribute('src')){$('#embImg').src=LOGO_EMBLEM;$('#diImg').src=LOGO_DIGITAL}
   $('#logoSlot').innerHTML=logo;
@@ -268,7 +187,7 @@ function renderChrome(){
     <div><b class="h">Services</b><a href="#register">Student registration</a><a href="#trainer">Trainer registration</a><a href="#track">Track status</a><a href="#verify">Verify certificate</a><a href="#login">Staff login</a></div>
     <div><b class="h">Important links</b>${ext('https://karbianglong.co.in/','KAAC official website')}${ext('https://artpskaac.in/stipend/','Stipend for ST(H) students')}${ext('https://karbiyouthfestival.com/','Karbi Youth Festival')}${ext('https://assam.gov.in/','Assam State Portal')}${ext('https://www.skillindiadigital.gov.in/','Skill India Digital Hub')}${ext('https://www.india.gov.in/','National Portal of India')}</div>
   </div>
-  <div class="ft-bottom"><span>© ${YEAR} ${esc(st.deptName)}, ${esc(st.council)} · Last updated ${fmtD(last||nowISO())} · <span id="modeNote">${MODE==='shared'?'Records are stored in the shared portal database.':'Demo mode: records are stored in this browser only.'}</span></span>
+  <div class="ft-bottom"><span>© ${YEAR} ${esc(st.deptName)}, ${esc(st.council)} · Last updated ${fmtD(last||nowISO())}${DEMO?' · <span id="modeNote">Development mode: demo accounts are enabled.</span>':''}</span>
     <span class="gf-tools" role="group" aria-label="Display options"><button onclick="setFs(-1)" aria-label="Smaller text">A-</button><button onclick="setFs(0)" aria-label="Normal text size">A</button><button onclick="setFs(1)" aria-label="Larger text">A+</button><button onclick="toggleTheme()" aria-label="Switch light or dark theme">◐</button></span></div>`;
 }
 let fsLevel=0;
@@ -309,7 +228,7 @@ setInterval(()=>{if(route==='home'&&!carPause&&!document.hidden&&!matchMedia('(p
 function homeSearch(e){
   e.preventDefault(); const q=$('#gq').value.trim(), u=q.toUpperCase();
   if(!q){go('courses');return}
-  if(u.includes('CERT')){verifyQ=u;go('verify');return}
+  if(u.includes('CERT')){go('verify/'+encodeURIComponent(u));return}
   if(/^KAAC-SDE-/.test(u)){trackPrefill=u;go('track');return}
   courseQ=q; courseSector='all'; go('courses');
 }
@@ -317,14 +236,15 @@ function gSuggest(v){
   const box=$('#gsug'); if(!box) return; v=v.trim(); const lv=v.toLowerCase();
   if(!v){box.hidden=true;box.innerHTML='';return}
   const rows=[];
-  if(/^kaac/i.test(v)) rows.push(`<button type="button" onmousedown="event.preventDefault()" onclick="${/cert/i.test(v)?`verifyQ='${esc(v.toUpperCase())}';go('verify')`:`trackPrefill='${esc(v.toUpperCase())}';go('track')`}">${ic('search')}<span>${/cert/i.test(v)?'Verify certificate':'Track application'} ${esc(v.toUpperCase())}</span></button>`);
+  // The typed text goes in a data attribute, never into the onclick code itself.
+  if(/^kaac/i.test(v)) rows.push(`<button type="button" onmousedown="event.preventDefault()" data-v="${esc(v.toUpperCase())}" onclick="${/cert/i.test(v)?`go('verify/'+encodeURIComponent(this.dataset.v))`:`trackPrefill=this.dataset.v;go('track')`}">${ic('search')}<span>${/cert/i.test(v)?'Verify certificate':'Track application'} ${esc(v.toUpperCase())}</span></button>`);
   list('courses').filter(c=>c.active&&(c.name+' '+c.id+' '+sectorName(c.sectorId)).toLowerCase().includes(lv)).slice(0,6)
     .forEach(c=>rows.push(`<button type="button" onmousedown="event.preventDefault()" onclick="courseQ='${c.id}';courseSector='all';go('courses')">${ic('search')}<span>${esc(c.name)}</span><small>${esc(sectorName(c.sectorId))}</small></button>`));
   box.innerHTML=rows.join(''); box.hidden=!rows.length;
 }
 function vHome(){
   const st=settings(), courses=list('courses').filter(c=>c.active), sectors=list('sectors'), centres=list('centres').filter(c=>c.active);
-  const ns=latestNotices(4); const top=ns[0]; const logo=st.logo?`<img src="${st.logo}" alt="">`:'KAAC';
+  const ns=latestNotices(4); const top=ns[0]; const logo=st.logo?`<img src="${esc(st.logo)}" alt="">`:'KAAC';
   const slides=[
     {t:'t1',bg:'bg-render',alt:'Karbi-style ceremonial gateway',icon:'userplus',h:`Registration open for the ${YEAR} session`,p:`Free training in ${courses.length} courses across ${sectors.length} sectors for the youth of Karbi Anglong and West Karbi Anglong.`,a:['#register','Register now']},
     {t:'t2',bg:'bg-museum',alt:'Nothengpi Karbi Heritage Museum lit at night',icon:'book',h:'Stipend for ST (Hills) students',p:'The council gives stipends to ST (Hills) students pursuing professional courses. Applications are made on the council’s stipend portal.',a:['https://artpskaac.in/stipend/','Visit the stipend portal',1]},
@@ -475,7 +395,7 @@ function xCard(c){
 function vLearn(){
   const all=extCourses(); const topics=[...new Set(all.map(c=>c.topic))]; const provs=[...new Set(all.map(c=>c.provider))];
   const cs=all.filter(c=>(!learnTopic||c.topic===learnTopic)&&(!learnProv||c.provider===learnProv));
-  const chips=(arr,cur,set)=>['',...arr].map(v=>`<button class="chip" aria-pressed="${cur===v}" onclick="${set}='${esc(v)}';render()">${esc(v||'All')}</button>`).join('');
+  const chips=(arr,cur,set)=>['',...arr].map(v=>`<button class="chip" aria-pressed="${cur===v}" data-v="${esc(v)}" onclick="${set}=this.dataset.v;render()">${esc(v||'All')}</button>`).join('');
   return `${pageHead('Online learning','AI, machine learning and data science courses from trusted platforms. Each course opens on the provider’s own website.')}
   <div class="row" style="margin-bottom:10px"><span class="small muted" style="min-width:64px">Topic</span><div class="chips">${chips(topics,learnTopic,'learnTopic')}</div></div>
   <div class="row" style="margin-bottom:20px"><span class="small muted" style="min-width:64px">Platform</span><div class="chips">${chips(provs,learnProv,'learnProv')}</div></div>
@@ -522,19 +442,18 @@ function editExt(kind,id){
   <div class="row" style="justify-content:flex-end">${r?`<button type="button" class="btn danger" onclick="removeExt('${kind}','${esc(id)}')">Remove</button>`:''}<button class="btn primary">Save</button></div></form>`,true);
 }
 async function saveExt(kind,id,form){
-  const isJobs=kind==='jobs'; const coll=isJobs?'jobs':'extcourses'; const el=form.elements; const v=n=>el[n]?el[n].value.trim():'';
+  const isJobs=kind==='jobs'; const el=form.elements; const v=n=>el[n]?el[n].value.trim():'';
   if(!v('title')){toast('Add a title.');return}
   if(!/^https:\/\/\S+$/.test(v('url'))){toast('Add a full link starting with https://');return}
-  id=id||(isJobs?'J':'X')+Date.now().toString(36);
-  const o=isJobs?{id,title:v('title'),employer:v('employer'),location:v('location'),pay:v('pay'),req:v('req'),posted:v('posted'),source:v('source')||'Job site',url:v('url'),course:v('course'),featured:el.featured.checked}
-    :{id,title:v('title'),provider:v('provider')||'Other',topic:v('topic')||'General',by:v('by'),level:v('level'),duration:v('duration'),cost:v('cost'),url:v('url'),points:v('points').split('\n').map(s=>s.trim()).filter(Boolean),featured:el.featured.checked};
-  await put(coll,id,o); toast('Saved.'); closeModal(); render();
+  const data=isJobs?{title:v('title'),employer:v('employer'),location:v('location'),pay:v('pay'),req:v('req'),posted:v('posted'),source:v('source'),url:v('url'),course:v('course'),featured:el.featured.checked}
+    :{title:v('title'),provider:v('provider'),topic:v('topic'),by:v('by'),level:v('level'),duration:v('duration'),cost:v('cost'),url:v('url'),points:v('points').split('\n').map(s=>s.trim()).filter(Boolean),featured:el.featured.checked};
+  // A built-in item that is edited is saved under its own ID, so it replaces the default.
+  if(await act('save_ext',{kind,id,data},'Saved.')){closeModal();render()}
 }
 async function removeExt(kind,id){
-  const coll=kind==='jobs'?'jobs':'extcourses'; const isDef=(kind==='jobs'?DEF_JOBS:DEF_EXT).some(d=>d.id===id);
+  const isDefault=(kind==='jobs'?DEF_JOBS:DEF_EXT).some(d=>d.id===id);
   if(!confirm('Remove this from the website?')) return;
-  if(isDef) await put(coll,id,{id,hidden:true}); else await del(coll,id);
-  toast('Removed.'); closeModal(); render();
+  if(await act('remove_ext',{kind,id,isDefault},'Removed.')){closeModal();render()}
 }
 
 /* About */
@@ -566,10 +485,8 @@ function openNotice(id){
   ${(n.body||'').split(/\n+/).filter(Boolean).map(p=>`<p>${esc(p)}</p>`).join('')}
   ${n.attachDocId?`<div class="row"><button class="btn" onclick="viewDoc('${n.attachDocId}')">View attachment</button><button class="btn" onclick="downloadAttachment('${n.attachDocId}')">Download</button></div><div id="docView" style="margin-top:12px"></div>`:''}</div>`);
 }
-async function downloadAttachment(id){
-  const d=await getDocFile(id); if(!d){toast('This file is not available.');return}
-  const bin=atob(d.data.split(',')[1]); const u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);
-  saveFile((d.name||'attachment').replace(/\.[^.]+$/,'')+(d.type==='application/pdf'?'.pdf':'.jpg'),u);
+function downloadAttachment(id){
+  const a=document.createElement('a');a.href=docUrl(id,true);document.body.appendChild(a);a.click();a.remove();
 }
 
 /* Contact */
@@ -601,20 +518,20 @@ function editNotice(id){
   <div class="field"><label>Date</label><input type="date" name="date" required value="${n?.date||today()}"></div>
   <div class="field"><label>Visibility</label><select name="active"><option value="1">Published</option><option value="0" ${n&&n.active===false?'selected':''}>Hidden</option></select></div></div>
   <div class="field"><label>Details</label><textarea name="body" rows="5">${esc(n?.body||'')}</textarea></div>
-  <div class="field"><label>Attachment (PDF under 180 KB, or an image)</label><input type="file" id="noticeFile" accept="image/*,application/pdf">${n?.attachName?`<div class="hint">Current file: ${esc(n.attachName)} · <label style="display:inline;font-weight:500"><input type="checkbox" id="noticeRemove"> Remove it</label></div>`:''}</div>
+  <div class="field"><label>Attachment (PDF up to 2 MB, or a JPG/PNG image)</label><input type="file" id="noticeFile" accept="image/*,application/pdf">${n?.attachName?`<div class="hint">Current file: ${esc(n.attachName)} · <label style="display:inline;font-weight:500"><input type="checkbox" id="noticeRemove"> Remove it</label></div>`:''}</div>
   <div class="row" style="justify-content:flex-end">${n?`<button type="button" class="btn danger" onclick="delNotice('${id}')">Delete</button>`:''}<button class="btn primary">${n?'Save notice':'Publish notice'}</button></div></form>`);
 }
 async function saveNotice(f,id){
-  const isNewN=!id; id=id||'NT'+Date.now().toString(36);
-  const old=S.notices[id]||{}; const el=f.elements;
-  const o={...old,id,title:el.title.value.trim(),category:el.category.value,date:el.date.value,body:el.body.value,active:el.active.value==='1',createdAt:old.createdAt||nowISO(),updatedAt:nowISO(),by:ME.name};
-  if(!o.title){toast('Add a title for the notice.');return}
+  const el=f.elements;
+  if(!el.title.value.trim()){toast('Add a title for the notice.');return}
+  const fd=new FormData();
+  [['id',id],['title',el.title.value.trim()],['category',el.category.value],['date',el.date.value],['body',el.body.value],['active',el.active.value]].forEach(([k,v])=>fd.append(k,v));
   const file=$('#noticeFile').files[0];
-  if(file){try{const p=await processFile(file);const did=id+'-file';await put('docs',did,{id:did,noticeId:id,name:file.name,type:p.type,data:p.data});Object.assign(o,{attachDocId:did,attachName:file.name,attachType:p.type})}catch(e){toast(e.message);return}}
-  else if($('#noticeRemove')?.checked){if(o.attachDocId)await del('docs',o.attachDocId);Object.assign(o,{attachDocId:'',attachName:'',attachType:''})}
-  await put('notices',id,o); toast(isNewN?'Notice published.':'Notice saved.'); closeModal(); render();
+  if(file){try{fd.append('file',await uploadable(file))}catch(e){toast(e.message);return}}
+  else if($('#noticeRemove')?.checked) fd.append('removeFile','1');
+  if(await act('save_notice',null,id?'Notice saved.':'Notice published.',fd)){closeModal();render()}
 }
-async function delNotice(id){const n=S.notices[id];if(!confirm('Delete this notice?'))return;if(n.attachDocId)await del('docs',n.attachDocId);await del('notices',id);toast('Notice deleted.');closeModal();render()}
+async function delNotice(id){if(!confirm('Delete this notice?'))return;if(await act('delete_notice',{id},'Notice deleted.')){closeModal();render()}}
 
 /* ---------- Courses ---------- */
 let courseSector='all', courseQ='';
@@ -654,7 +571,7 @@ function vRegister(){
   <form id="regForm" novalidate>
   <fieldset><legend>Aadhaar and contact</legend>
     <div class="grid g3">
-      <div class="field"><label>Aadhaar number <span class="req">*</span></label><input name="aadhaar" inputmode="numeric" maxlength="14" placeholder="12-digit number" autocomplete="off"><div class="hint">Only the last 4 digits are stored on record. <a href="#" onclick="event.preventDefault();document.querySelector('[name=aadhaar]').value=testAadhaar()">Fill a test number</a></div></div>
+      <div class="field"><label>Aadhaar number <span class="req">*</span></label><input name="aadhaar" inputmode="numeric" maxlength="14" placeholder="12-digit number" autocomplete="off"><div class="hint">Only the last 4 digits are stored on record.${DEMO?` <a href="#" onclick="event.preventDefault();document.querySelector('[name=aadhaar]').value=testAadhaar()">Fill a test number</a>`:''}</div></div>
       <div class="field"><label>Mobile number <span class="req">*</span></label><input name="mobile" inputmode="numeric" maxlength="10" placeholder="10 digits"><div class="hint">Status updates are sent by SMS</div></div>
       <div class="field"><label>Email</label><input name="email" type="email" placeholder="name@example.com"></div>
     </div>
@@ -694,7 +611,7 @@ function vRegister(){
     </div>
   </fieldset>
   <fieldset><legend>Documents</legend>
-    <p class="small muted">Images are compressed automatically. PDFs must be under 180 KB.</p>
+    <p class="small muted">JPG, PNG or PDF. Photos are resized automatically. PDFs can be up to 2 MB.</p>
     <div class="grid g2">${DOC_TYPES.map(d=>`<div class="field"><label>${d.label} ${d.req?'<span class="req">*</span>':''}</label><input type="file" name="doc_${d.key}" accept="${d.img?'image/*':'image/*,application/pdf'}"></div>`).join('')}</div>
   </fieldset>
   <div class="panel flat" style="margin-bottom:16px"><label style="display:flex;gap:10px;font-weight:500"><input type="checkbox" name="declare"> I declare that the information given is true. I consent to the use of my Aadhaar number for identity verification for this scheme only.</label></div>
@@ -718,17 +635,25 @@ function wireRegister(){
   f.aadhaar.addEventListener('input',()=>{const v=f.aadhaar.value.replace(/\D/g,'').slice(0,12);f.aadhaar.value=v.replace(/(\d{4})(?=\d)/g,'$1 ')});
   f.addEventListener('submit',submitRegistration);
 }
-function readImage(file,max=900,q=.7,type='image/jpeg'){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const k=Math.min(1,max/Math.max(im.width,im.height));const c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext('2d').drawImage(im,0,0,c.width,c.height);res(c.toDataURL(type,q))};im.onerror=rej;im.src=r.result};r.onerror=rej;r.readAsDataURL(file)})}
-function readRaw(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(file)})}
-async function processFile(file){
-  if(file.type.startsWith('image/')) return {data:await readImage(file),type:'image/jpeg'};
-  if(file.type==='application/pdf'){if(file.size>180*1024) throw new Error(file.name+' is larger than 180 KB. Compress the PDF or upload a photo of it instead.');return {data:await readRaw(file),type:file.type}}
+function readImage(file,max=900,q=.7,type='image/jpeg'){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const k=Math.min(1,max/Math.max(im.width,im.height));const c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);const x=c.getContext('2d');if(type==='image/jpeg'){x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height)}x.drawImage(im,0,0,c.width,c.height);res(c.toDataURL(type,q))};im.onerror=()=>rej(new Error(file.name+' is not an image this browser can read.'));im.src=r.result};r.onerror=rej;r.readAsDataURL(file)})}
+/** Images are resized to a sensible size in the browser before upload; PDFs are sent as they are. */
+async function uploadable(file){
+  if(file.type.startsWith('image/')){
+    const data=await readImage(file,1600,.82);
+    const bin=atob(data.split(',')[1]); const u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);
+    return new File([u],file.name.replace(/\.[^.]+$/,'')+'.jpg',{type:'image/jpeg'});
+  }
+  if(file.type==='application/pdf'){if(file.size>2*1024*1024) throw new Error(file.name+' is larger than 2 MB. Compress the PDF or upload a photo of it instead.');return file}
   throw new Error(file.name+' is not a JPG, PNG or PDF file.');
 }
-function nextId(prefix,coll,field='id'){
-  const nums=list(coll).map(x=>String(x[field]||'')).filter(v=>v.startsWith(prefix)).map(v=>parseInt(v.slice(prefix.length))||0);
-  return prefix+String((nums.length?Math.max(...nums):0)+1).padStart(5,'0');
+/** Adds the chosen document files (and a small photo thumbnail) to a form submission. */
+async function addFiles(fd,form,types){
+  for(const d of types){const inp=form.querySelector(`[name=doc_${d.key}]`);const file=inp&&inp.files[0];if(!file)continue;
+    fd.append('doc_'+d.key,await uploadable(file));
+    if(d.key==='photo') fd.append('photo_thumb',await readImage(file,160,.75));
+  }
 }
+const showErrors = (box,msg) => {box.innerHTML=String(msg).split('\n').map(esc).join('<br>');box.scrollIntoView({behavior:'smooth',block:'center'})};
 async function submitRegistration(e){
   e.preventDefault(); const f=e.target, err=$('#regErr'); err.textContent='';
   const v=n=>f[n].value.trim(); const aadhaar=v('aadhaar').replace(/\s/g,'');
@@ -737,31 +662,20 @@ async function submitRegistration(e){
   if(!/^[6-9]\d{9}$/.test(v('mobile'))) problems.push('Enter a valid 10-digit mobile number starting with 6–9.');
   if(v('email')&&!/^\S+@\S+\.\S+$/.test(v('email'))) problems.push('Enter a valid email address or leave it blank.');
   ['name','father','dob','gender','category','village','district','qual','pref1'].forEach(n=>{if(!v(n))problems.push('Fill in '+f[n].closest('.field').querySelector('label').childNodes[0].textContent.trim().toLowerCase()+'.')});
-  if(v('pin')&&!/^\d{6}$/.test(v('pin'))||!v('pin')) problems.push('Enter a 6-digit PIN code.');
+  if(!/^\d{6}$/.test(v('pin'))) problems.push('Enter a 6-digit PIN code.');
   DOC_TYPES.filter(d=>d.req).forEach(d=>{if(!f['doc_'+d.key].files[0])problems.push('Upload '+d.label.toLowerCase()+'.')});
   if(!f.declare.checked) problems.push('Tick the declaration to continue.');
-  if(problems.length){err.innerHTML=problems.map(esc).join('<br>');err.scrollIntoView({behavior:'smooth',block:'center'});return}
-  const hash=await sha256('aadhaar:'+aadhaar);
-  const dup=list('students').find(s=>s.aadhaarHash===hash&&!['rejected','notselected','certified','failed'].includes(s.status));
-  if(dup){err.textContent=`An active application (${dup.id}) already exists for this Aadhaar number. Use Track application to check it.`;return}
+  if(problems.length){showErrors(err,problems.join('\n'));return}
   const btn=$('#regBtn'); btn.disabled=true; btn.textContent='Uploading documents…';
   try{
-    const id=nextId(`KAAC-SDE-${YEAR}-`,'students');
-    const docs=[]; let photo='';
-    for(const d of DOC_TYPES){const file=f['doc_'+d.key].files[0]; if(!file) continue;
-      const p=await processFile(file); const docId=id+'-'+d.key;
-      await put('docs',docId,{id:docId,studentId:id,key:d.key,name:file.name,type:p.type,data:p.data});
-      docs.push({key:d.key,label:d.label,name:file.name,type:p.type,docId,status:'pending'});
-      if(d.key==='photo') photo=await readImage(file,160,.75);
-    }
-    const s={id,name:v('name'),father:v('father'),mother:v('mother'),dob:v('dob'),gender:v('gender'),category:v('category'),pwd:v('pwd'),
-      aadhaarLast4:aadhaar.slice(-4),aadhaarHash:hash,mobile:v('mobile'),email:v('email'),village:v('village'),block:v('block'),district:v('district'),pin:v('pin'),
-      qual:v('qual'),board:v('board'),year:v('year'),pct:v('pct'),pref1:v('pref1'),pref2:v('pref2'),prefCentre:v('prefCentre'),
-      docs,photo,status:'submitted',createdAt:nowISO(),history:[{at:nowISO(),by:v('name'),role:'Applicant',action:'Application submitted',remark:''}]};
-    await put('students',id,s); await notify(s,'submitted');
+    const fd=new FormData();
+    ['mobile','email','name','father','mother','dob','gender','category','pwd','village','block','district','pin','qual','board','year','pct','pref1','pref2','prefCentre'].forEach(n=>fd.append(n,v(n)));
+    fd.append('aadhaar',aadhaar); fd.append('declare','1');
+    await addFiles(fd,f,DOC_TYPES);
+    const d=await api('register',{method:'POST',form:fd});
     applyFor=''; route='track'; history.replaceState(null,'','#track'); render();
-    trackResult(s.id,s.dob,true);
-  }catch(ex){err.textContent=ex.message||'Could not submit. Try again.';btn.disabled=false;btn.textContent='Submit application'}
+    showTracked(d,v('dob'),true);
+  }catch(ex){showErrors(err,ex.message||'Could not submit. Try again.');btn.disabled=false;btn.textContent='Submit application'}
 }
 
 /* ---------- Track ---------- */
@@ -772,28 +686,36 @@ function vTrack(){
     <div class="grid g2"><div class="field"><label>Application or trainer ID</label><input name="aid" placeholder="KAAC-SDE-${YEAR}-00001" value="${esc(trackFound?.id||trackPrefill||'')}"></div>
     <div class="field"><label>Date of birth</label><input name="dob" type="date" value="${esc(trackFound?.dob||'')}"></div></div>
     <button class="btn primary">Show status</button></form></div>
-  <div id="trackOut" style="margin-top:20px">${trackFound?(trackFound.trainer?trainerTrackHTML(S.trainers[trackFound.id]):trackHTML(S.students[trackFound.id]||trackFound)):''}</div>`;
+  <div id="trackOut" style="margin-top:20px">${trackFound?(trackFound.trainer?trainerTrackHTML(S.trainers[trackFound.id]):trackHTML(S.students[trackFound.id])):''}</div>`;
 }
-function trackResult(id,dob,fresh){
-  const tr=S.trainers[id.toUpperCase()];
-  if(tr&&tr.dob===dob){trackFound={id:tr.id,dob:tr.dob,trainer:true};$('#trackOut').innerHTML=(fresh?`<div class="callout" style="margin-bottom:16px"><b>Registration submitted.</b> Your trainer registration ID is <b>${esc(tr.id)}</b>. Save it — you need it with your date of birth to check status.</div>`:'')+trainerTrackHTML(tr);return}
-  const s=S.students[id.toUpperCase()]||S.students[id];
-  if(!s||s.dob!==dob){trackFound=null;$('#trackOut').innerHTML='<div class="panel">No application matches that ID and date of birth. Check both and try again.</div>';return}
-  trackFound={id:s.id,dob:s.dob};
-  $('#trackOut').innerHTML=(fresh?`<div class="callout" style="margin-bottom:16px"><b>Application submitted.</b> Your application ID is <b>${esc(s.id)}</b>. Save it — you need it with your date of birth to track status and download documents.</div>`:'')+trackHTML(s);
+/** Shows an application returned by the server. It only ever returns the record whose ID and date of birth match. */
+function showTracked(d,dob,fresh){
+  const p=d.kind==='trainer'?d.trainer:d.student;
+  (d.kind==='trainer'?S.trainers:S.students)[p.id]=p;
+  (d.batches||[]).forEach(b=>S.batches[b.id]=b); (d.ojt||[]).forEach(o=>S.ojt[o.id]=o);
+  trackFound={id:p.id,dob,trainer:d.kind==='trainer'};
+  const out=$('#trackOut'); if(!out) return;
+  const what=d.kind==='trainer'?['Registration submitted.','trainer registration ID','check status']:['Application submitted.','application ID','track status and download documents'];
+  out.innerHTML=(fresh?`<div class="callout" style="margin-bottom:16px"><b>${what[0]}</b> Your ${what[1]} is <b>${esc(p.id)}</b>. Save it — you need it with your date of birth to ${what[2]}.</div>`:'')
+    +(d.kind==='trainer'?trainerTrackHTML(p):trackHTML(p));
+}
+async function trackResult(id,dob){
+  const out=$('#trackOut'); out.innerHTML='<p class="muted">Checking…</p>';
+  try{showTracked(await api('track',{method:'POST',data:{id,dob}}),dob,false)}
+  catch(e){trackFound=null;out.innerHTML=`<div class="panel">${esc(e.message)}</div>`}
 }
 function trackHTML(s){
   const b=S.batches[s.batchId]; const ojts=list('ojt').filter(o=>o.studentId===s.id&&o.status==='signed');
   return `<div class="grid g2">
-    <div class="panel"><div class="row" style="align-items:flex-start">${s.photo?`<img class="photo" src="${s.photo}" alt="">`:''}<div><h2 style="margin-bottom:4px">${esc(s.name)}</h2><div class="muted small">${esc(s.id)}</div><div style="margin-top:8px">${statusTag(s.status)}</div></div></div>
+    <div class="panel"><div class="row" style="align-items:flex-start">${s.photo?`<img class="photo" src="${esc(s.photo)}" alt="">`:''}<div><h2 style="margin-bottom:4px">${esc(s.name)}</h2><div class="muted small">${esc(s.id)}</div><div style="margin-top:8px">${statusTag(s.status)}</div></div></div>
       <hr class="sep"><dl class="kv"><dt>Course</dt><dd>${esc(courseName(s.skillId||s.pref1))} <span class="muted">(${esc(s.skillId||s.pref1)})</span></dd>
       ${s.admit?`<dt>Aptitude test</dt><dd>${fmtD(s.admit.date)}, ${esc(s.admit.time)} at ${esc(s.admit.venue)}</dd>`:''}
       ${b?`<dt>Batch</dt><dd>${esc(b.id)}, ${fmtD(b.start)} to ${fmtD(b.end)}</dd><dt>Centre</dt><dd>${esc(centreName(b.centreId))} (${esc(b.centreId)})</dd>`:''}
       ${s.cert?`<dt>Certificate</dt><dd>${esc(s.cert.no)}</dd>`:''}</dl>
       <div class="row" style="margin-top:16px">
-        ${s.admit?`<button class="btn primary" onclick="openDoc('admit','${s.id}')">Download admit card</button>`:''}
-        ${s.cert?`<button class="btn primary" onclick="openDoc('cert','${s.id}')">Download certificate</button>`:''}
-        ${ojts.map(o=>`<button class="btn" onclick="openDoc('ojt','${o.id}')">OJT letter: ${esc(o.employer)}</button>`).join('')}
+        ${s.admit?`<button class="btn primary" onclick="openDoc('admit','${esc(s.id)}')">Download admit card</button>`:''}
+        ${s.cert?`<button class="btn primary" onclick="openDoc('cert','${esc(s.id)}')">Download certificate</button>`:''}
+        ${ojts.map(o=>`<button class="btn" onclick="openDoc('ojt','${esc(o.id)}')">OJT letter: ${esc(o.employer)}</button>`).join('')}
       </div>
       ${s.status==='returned'?resubmitHTML(s):''}
     </div>
@@ -804,28 +726,32 @@ function resubmitHTML(s){
   const flagged=(s.docs||[]).filter(d=>d.status==='rejected');
   const keys=flagged.length?flagged.map(d=>d.key):DOC_TYPES.map(d=>d.key);
   return `<hr class="sep"><h3>Correct and resubmit</h3><p class="small">${esc(s.history.slice(-1)[0]?.remark||'')}</p>
-  <form onsubmit="event.preventDefault();resubmit('${s.id}',this)">${keys.map(k=>{const d=DOC_TYPES.find(x=>x.key===k);return `<div class="field"><label>${d.label}</label><input type="file" name="doc_${k}" accept="image/*,application/pdf"></div>`}).join('')}
+  <form onsubmit="event.preventDefault();resubmit(this,DOC_TYPES)">${keys.map(k=>{const d=DOC_TYPES.find(x=>x.key===k);return `<div class="field"><label>${d.label}</label><input type="file" name="doc_${k}" accept="${d.img?'image/*':'image/*,application/pdf'}"></div>`}).join('')}
   <button class="btn primary">Resubmit application</button></form>`;
 }
-async function resubmit(id,f){
-  const s=S.students[id]; const docs=[...s.docs]; let photo=s.photo, n=0;
-  try{for(const inp of f.querySelectorAll('input[type=file]')){const file=inp.files[0];if(!file)continue;const key=inp.name.slice(4);const p=await processFile(file);const docId=id+'-'+key;
-    await put('docs',docId,{id:docId,studentId:id,key,name:file.name,type:p.type,data:p.data});
-    const i=docs.findIndex(d=>d.key===key);const rec={key,label:DOC_TYPES.find(d=>d.key===key).label,name:file.name,type:p.type,docId,status:'pending'};if(i>=0)docs[i]=rec;else docs.push(rec);
-    if(key==='photo')photo=await readImage(file,160,.75);n++}
-  }catch(ex){toast(ex.message);return}
-  if(!n){toast('Choose at least one corrected document.');return}
-  await setStatus(s,'submitted','Resubmitted with corrected documents','',{docs,photo},null);
-  toast('Application resubmitted.'); trackResult(id,s.dob);
+/** Sends corrected documents for the application currently shown on Track status. */
+async function resubmit(f,types){
+  if(!trackFound) return;
+  const fd=new FormData(); fd.append('id',trackFound.id); fd.append('dob',trackFound.dob);
+  try{await addFiles(fd,f,types)}catch(ex){toast(ex.message);return}
+  if(![...fd.keys()].some(k=>k.startsWith('doc_'))){toast('Choose at least one corrected document.');return}
+  try{showTracked(await api('resubmit',{method:'POST',form:fd}),trackFound.dob,false);toast('Resubmitted. The department will check your documents again.')}
+  catch(e){toast(e.message)}
 }
 
 /* ---------- Verify certificate ---------- */
-let verifyQ='';
+let verifyQ='', verifyRes=null;
+async function runVerify(){
+  verifyRes=verifyQ?{loading:true}:null; if(route==='verify')render();
+  if(!verifyQ) return;
+  try{verifyRes=await api('verify',{query:{no:verifyQ}})}catch(e){verifyRes={error:e.message}}
+  if(route==='verify')render();
+}
 function vVerify(){
-  const s=verifyQ?list('students').find(x=>x.cert&&x.cert.no.toUpperCase()===verifyQ.toUpperCase()):null;
+  const r=verifyRes;
   return `${pageHead('Verify a certificate','Employers can confirm a certificate issued by the department by its number.')}
-  <div class="panel" style="max-width:560px"><form onsubmit="event.preventDefault();verifyQ=this.q.value.trim();render()"><div class="field"><label>Certificate number</label><input name="q" value="${esc(verifyQ)}" placeholder="KAAC-SDE-CERT-${YEAR}-00001"></div><button class="btn primary">Verify</button></form></div>
-  ${verifyQ?`<div class="panel" style="max-width:560px;margin-top:16px">${s?`<span class="tag ok">Valid certificate</span><dl class="kv" style="margin-top:12px"><dt>Name</dt><dd>${esc(s.name)}</dd><dt>Student ID</dt><dd>${esc(s.id)}</dd><dt>Course</dt><dd>${esc(courseName(s.skillId))} (${esc(s.skillId)})</dd><dt>Centre</dt><dd>${esc(centreName(s.centreId))} (${esc(s.centreId)})</dd><dt>Grade</dt><dd>${esc(s.result?.grade||'—')}</dd><dt>Issued</dt><dd>${fmtD(s.cert.issuedAt)}</dd></dl>`:'<span class="tag bad">Not found</span><p style="margin-top:10px">No certificate with this number was issued by the department.</p>'}</div>`:''}`;
+  <div class="panel" style="max-width:560px"><form onsubmit="event.preventDefault();verifyQ=this.q.value.trim();history.replaceState(null,'','#verify/'+encodeURIComponent(verifyQ));runVerify()"><div class="field"><label>Certificate number</label><input name="q" value="${esc(verifyQ)}" placeholder="KAAC-SDE-CERT-${YEAR}-00001"></div><button class="btn primary">Verify</button></form></div>
+  ${r?`<div class="panel" style="max-width:560px;margin-top:16px">${r.loading?'<p class="muted">Checking…</p>':r.error?`<p class="err">${esc(r.error)}</p>`:r.valid?`<span class="tag ok">Valid certificate</span><dl class="kv" style="margin-top:12px"><dt>Certificate no.</dt><dd>${esc(r.certNo)}</dd><dt>Name</dt><dd>${esc(r.name)}</dd><dt>Student ID</dt><dd>${esc(r.id)}</dd><dt>Course</dt><dd>${esc(r.course)} (${esc(r.skillId)})</dd><dt>Centre</dt><dd>${esc(r.centre)} (${esc(r.centreId)})</dd><dt>Grade</dt><dd>${esc(r.grade)}</dd><dt>Issued</dt><dd>${fmtD(r.issuedAt)}</dd></dl>`:'<span class="tag bad">Not found</span><p style="margin-top:10px">No certificate with this number was issued by the department.</p>'}</div>`:''}`;
 }
 
 /* ---------- Login ---------- */
@@ -836,19 +762,23 @@ function vLogin(){
     <div class="field"><label>Password</label><input name="p" type="password" autocomplete="current-password"></div>
     <div id="loginErr" class="err"></div>
     <button class="btn primary" style="margin-top:8px">Log in</button></form></div>
-  <details class="panel flat" style="margin-top:16px"><summary style="cursor:pointer;font-weight:600">Demo accounts</summary>
+  ${DEMO?`<details class="panel flat" style="margin-top:16px"><summary style="cursor:pointer;font-weight:600">Demo accounts (development mode only)</summary>
     <div class="tw" style="margin-top:10px"><table><thead><tr><th>Role</th><th>Username</th><th>Password</th></tr></thead><tbody>
-    ${SEED.users.map(u=>`<tr><td>${ROLES[u[3]]}${u[4]?' ('+u[4]+')':''}</td><td>${u[0]}</td><td>${u[1]}</td></tr>`).join('')}</tbody></table></div>
-    <p class="small muted" style="margin-top:8px">Change these passwords in Users &amp; roles before real use.</p></details></div>`;
+    ${DEMO_USERS.map(u=>`<tr><td>${ROLES[u[2]]}${u[3]?' ('+u[3]+')':''}</td><td>${u[0]}</td><td>${u[1]}</td></tr>`).join('')}</tbody></table></div>
+    <p class="small muted" style="margin-top:8px">These accounts exist only while the server runs with DEMO_USERS=true. They are never created in production.</p></details>`:''}</div>`;
 }
 async function doLogin(f){
-  const u=f.u.value.trim().toLowerCase(), user=S.users[u];
-  if(!user||!user.active||user.pwHash!==await sha256(u+':'+f.p.value)){$('#loginErr').textContent='Username or password is incorrect, or the account is disabled.';return}
-  ME={id:user.id,name:user.name,role:user.role,centreId:user.centreId||''};
-  try{sessionStorage.setItem('kaac-user',JSON.stringify(ME))}catch(e){}
-  staffView='dash'; go('staff');
+  const err=$('#loginErr'); err.textContent='';
+  const btn=f.querySelector('button'); btn.disabled=true;
+  try{const r=await api('login',{method:'POST',data:{u:f.u.value.trim(),p:f.p.value}});ME=r.me;await loadStaff();staffView='dash';go('staff')}
+  catch(e){err.textContent=e.message;btn.disabled=false}
 }
-function logout(){ME=null;try{sessionStorage.removeItem('kaac-user')}catch(e){};go('home')}
+async function logout(){
+  try{await api('logout',{method:'POST'})}catch(e){}
+  ME=null; STAFF_COLLS.forEach(c=>S[c]={}); closeModal();
+  try{await loadPublic()}catch(e){}
+  go('home');
+}
 
 /* ============================== Staff area ============================== */
 const MENU=[
@@ -886,7 +816,7 @@ function vStaff(){
   return `<div class="staff"><aside class="side">
     <div class="who"><b>${esc(ME.name)}</b><span class="small muted">${ROLES[ME.role]}${ME.centreId?' · '+esc(ME.centreId):''}</span></div>
     ${items.map(([k,l])=>{const n=pendingCount(k);return `<button class="nav" aria-current="${staffView===k}" onclick="staffView='${k}';render()"><span>${l}</span>${n?`<span class="badge">${n}</span>`:''}</button>`}).join('')}
-    <hr class="sep" style="margin:10px 0"><button class="nav" onclick="logout()">Log out</button>
+    <hr class="sep" style="margin:10px 0"><button class="nav" onclick="passwordDialog()">Change my password</button><button class="nav" onclick="logout()">Log out</button>
   </aside><section>${views[staffView]()}</section></div>`;
 }
 
@@ -959,7 +889,7 @@ async function openApp(id){
   if(can('training')&&s.status==='admit') actions.push(`<button class="btn danger" onclick="appAction('${id}','notselect')">Not selected</button><button class="btn primary" onclick="appAction('${id}','select')">Select candidate</button>`);
   openModal(`<div class="mh"><h3 style="margin:0">${esc(s.name)} · ${esc(s.id)}</h3><button class="btn sm" onclick="closeModal()">Close</button></div>
   <div class="mb"><div class="grid g2">
-    <div><div class="row" style="align-items:flex-start;margin-bottom:12px">${s.photo?`<img class="photo" src="${s.photo}" alt="">`:''}<div>${statusTag(s.status)}<div class="small muted" style="margin-top:6px">Submitted ${fmtDT(s.createdAt)}</div></div></div>
+    <div><div class="row" style="align-items:flex-start;margin-bottom:12px">${s.photo?`<img class="photo" src="${esc(s.photo)}" alt="">`:''}<div>${statusTag(s.status)}<div class="small muted" style="margin-top:6px">Submitted ${fmtDT(s.createdAt)}</div></div></div>
       <dl class="kv"><dt>Aadhaar</dt><dd>XXXX XXXX ${esc(s.aadhaarLast4)}</dd><dt>Father / mother</dt><dd>${esc(s.father)}${s.mother?' / '+esc(s.mother):''}</dd><dt>Date of birth</dt><dd>${fmtD(s.dob)} (age ${age(s.dob)})</dd><dt>Gender / category</dt><dd>${esc(s.gender)} · ${esc(s.category)}${s.pwd==='Yes'?' · PwD':''}</dd>
       <dt>Mobile / email</dt><dd>${esc(s.mobile)}${s.email?'<br>'+esc(s.email):''}</dd><dt>Address</dt><dd>${esc([s.village,s.block,s.district,s.pin].filter(Boolean).join(', '))}</dd>
       <dt>Qualification</dt><dd>${esc(s.qual)}${s.board?', '+esc(s.board):''}${s.year?' ('+esc(s.year)+')':''}${s.pct?', '+esc(s.pct):''}</dd>
@@ -969,7 +899,7 @@ async function openApp(id){
       ${s.score!=null?`<dt>Aptitude score</dt><dd>${esc(s.score)}</dd>`:''}
       ${s.batchId?`<dt>Batch / centre</dt><dd>${esc(s.batchId)} · ${esc(s.centreId)}</dd>`:''}</dl></div>
     <div><h3>Documents</h3><div id="docList">${(s.docs||[]).map(d=>`<div class="row" style="justify-content:space-between;padding:7px 0;border-bottom:1px dashed var(--line)"><span class="small"><b>${esc(d.label)}</b><br><span class="muted">${esc(d.name)}</span></span>
-      <span class="row" style="gap:6px">${d.status==='ok'?'<span class="tag ok">OK</span>':d.status==='rejected'?'<span class="tag bad">Incorrect</span>':''}<button class="btn sm" onclick="viewDoc('${d.docId}')">View</button>
+      <span class="row" style="gap:6px">${d.status==='ok'?'<span class="tag ok">OK</span>':d.status==='rejected'?'<span class="tag bad">Incorrect</span>':''}<button class="btn sm" onclick="viewDoc('${esc(d.docId)}','${esc(d.type)}')">View</button>
       ${can('dealing')&&s.status==='submitted'?`<button class="btn sm" onclick="markDoc('${id}','${d.key}','ok')">OK</button><button class="btn sm danger" onclick="markDoc('${id}','${d.key}','rejected')">Incorrect</button>`:''}</span></div>`).join('')}</div>
       <div id="docView" style="margin-top:12px"></div>
       <h3 style="margin-top:16px">History</h3><ul class="tl">${[...(s.history||[])].reverse().map(h=>`<li><b>${esc(h.action)}</b>${h.remark?`<div class="small">${esc(h.remark)}</div>`:''}<small>${fmtDT(h.at)} · ${esc(h.by)} (${esc(h.role)})</small></li>`).join('')}</ul></div>
@@ -977,22 +907,19 @@ async function openApp(id){
   ${actions.length?`<div class="field" style="margin-top:12px"><label>Remark</label><textarea id="appRemark" placeholder="Required when returning, rejecting or not selecting"></textarea></div>${s.status==='admit'?`<div class="field" style="max-width:220px"><label>Aptitude test score (out of 100)</label><input id="appScore" type="number" min="0" max="100"></div>`:''}`:''}
   </div>${actions.length?`<div class="mf">${actions.join('')}</div>`:''}`,true);
 }
-async function viewDoc(docId){
-  const box=$('#docView'); box.innerHTML='<p class="muted small">Loading…</p>';
-  const d=await getDocFile(docId); if(!d){box.innerHTML='<p class="err">This file is not available.</p>';return}
-  box.innerHTML=d.type==='application/pdf'?`<object data="${d.data}" type="application/pdf" style="width:100%;height:420px"><p class="small">PDF preview not supported here.</p></object>`:`<img class="docthumb" src="${d.data}" alt="${esc(d.name)}">`;
+/** Shows an uploaded document inside the open dialog. The server checks the viewer may see it. */
+function viewDoc(docId,type){
+  const box=$('#docView'); const url=docUrl(docId);
+  box.innerHTML=(type==='application/pdf'?`<iframe src="${esc(url)}" title="Document" style="width:100%;height:440px;border:1px solid var(--line);border-radius:8px"></iframe>`
+    :`<img class="docthumb" src="${esc(url)}" alt="Uploaded document">`)+`<p class="small" style="margin-top:6px"><a href="${esc(url)}" target="_blank" rel="noopener">Open in a new tab</a></p>`;
 }
-async function markDoc(id,key,status){const s=S.students[id];await put('students',id,{...s,docs:s.docs.map(d=>d.key===key?{...d,status}:d)});openApp(id)}
-async function appAction(id,act){
+async function markDoc(id,key,status){if(await act('mark_doc',{kind:'student',id,key,status}))openApp(id)}
+async function appAction(id,action){
   const s=S.students[id]; const remark=($('#appRemark')?.value||'').trim();
-  if(['reject','return','notselect'].includes(act)&&!remark){toast('Add a remark explaining the reason.');$('#appRemark').focus();return}
-  if(act==='verify'){if(s.docs.some(d=>d.status==='rejected')){toast('A document is marked incorrect. Return the application instead.');return}
-    await setStatus(s,'verified','Documents verified',remark,{docs:s.docs.map(d=>({...d,status:'ok'}))})}
-  if(act==='return') await setStatus(s,'returned','Returned for correction',remark);
-  if(act==='reject') await setStatus(s,'rejected','Application rejected',remark);
-  if(act==='select'){const sc=$('#appScore').value;await setStatus(s,'selected','Selected after aptitude test',remark,{score:sc===''?null:+sc,skillId:s.pref1})}
-  if(act==='notselect'){const sc=$('#appScore').value;await setStatus(s,'notselected','Not selected',remark,{score:sc===''?null:+sc})}
-  toast('Saved. Applicant notified by SMS'+(s.email?' and email.':'.')); closeModal(); render();
+  if(['reject','return','notselect'].includes(action)&&!remark){toast('Add a remark explaining the reason.');$('#appRemark').focus();return}
+  if(action==='verify'&&s.docs.some(d=>d.status==='rejected')){toast('A document is marked incorrect. Return the application instead.');return}
+  const sc=$('#appScore')?.value??'';
+  if(await act('app_action',{id,act:action,remark,score:sc===''?null:+sc},'Saved. Applicant notified by SMS'+(s.email?' and email.':'.'))){closeModal();render()}
 }
 
 /* ---------- Admit cards ---------- */
@@ -1002,7 +929,7 @@ function sAdmit(){
   <div class="panel" style="margin-bottom:18px"><div class="row" style="justify-content:space-between"><h3 style="margin:0">Eligible for admit card (${ver.length})</h3>
   ${can('supervising')&&ver.length?`<button class="btn primary" onclick="issueAdmitDialog([...document.querySelectorAll('.admitPick:checked')].map(i=>i.value))">Issue to selected</button>`:''}</div>
   <div class="tw" style="margin-top:12px"><table><thead><tr><th><input type="checkbox" aria-label="Select all" onchange="document.querySelectorAll('.admitPick').forEach(i=>i.checked=this.checked)"></th><th>Student ID</th><th>Name</th><th>Course</th><th>Eligibility</th></tr></thead><tbody>
-  ${ver.map(s=>{const e=eligibility(s,s.pref1);return `<tr><td><input type="checkbox" class="admitPick" value="${s.id}" ${e.ok?'checked':''}></td><td class="id">${esc(s.id)}</td><td>${esc(s.name)}</td><td>${esc(courseName(s.pref1))}</td><td>${e.ok?'<span class="tag ok">Eligible</span>':`<span class="tag warn">${esc(e.issues.join('; '))}</span>`}</td></tr>`}).join('')||'<tr><td colspan="5" class="muted">No verified candidates waiting.</td></tr>'}
+  ${ver.map(s=>{const e=eligibility(s,s.pref1);return `<tr><td><input type="checkbox" class="admitPick" value="${esc(s.id)}" ${e.ok?'checked':''}></td><td class="id">${esc(s.id)}</td><td>${esc(s.name)}</td><td>${esc(courseName(s.pref1))}</td><td>${e.ok?'<span class="tag ok">Eligible</span>':`<span class="tag warn">${esc(e.issues.join('; '))}</span>`}</td></tr>`}).join('')||'<tr><td colspan="5" class="muted">No verified candidates waiting.</td></tr>'}
   </tbody></table></div></div>
   <h3>Issued admit cards</h3><div class="tw"><table><thead><tr><th>Admit card no.</th><th>Student</th><th>Test</th><th>Venue</th><th>Status</th><th></th></tr></thead><tbody>
   ${issued.map(s=>`<tr><td class="id">${esc(s.admit.no)}</td><td>${esc(s.name)}<div class="small muted">${esc(s.id)}</div></td><td>${fmtD(s.admit.date)} ${esc(s.admit.time)}</td><td class="small">${esc(s.admit.venue)}</td><td>${statusTag(s.status)}</td><td><button class="btn sm" onclick="openDoc('admit','${s.id}')">View</button></td></tr>`).join('')||'<tr><td colspan="6" class="muted">No admit cards issued yet.</td></tr>'}
@@ -1019,10 +946,8 @@ function issueAdmitDialog(ids){
   <div class="row" style="justify-content:flex-end"><button class="btn primary">Issue and notify</button></div></form>`);
 }
 async function issueAdmit(ids,f){
-  for(const id of ids){const s=S.students[id];if(!s||s.status!=='verified')continue;
-    const no=nextId(`ADM-${YEAR}-`,'students','admitNo');
-    await setStatus(s,'admit','Admit card issued',`Test on ${fmtD(f.date.value)} at ${f.venue.value}`,{admitNo:no,admit:{no,date:f.date.value,time:f.time.value,venue:f.venue.value,issuedAt:nowISO(),by:ME.name}})}
-  toast(`${ids.length} admit card(s) issued and candidates notified.`); closeModal(); render();
+  const r=await act('issue_admit',{ids,date:f.date.value,time:f.time.value,venue:f.venue.value});
+  if(r){toast(`${r.issued} admit card(s) issued and candidates notified.`);closeModal();render()}
 }
 
 /* ---------- Batches ---------- */
@@ -1054,7 +979,7 @@ function batchDialog(courseId=''){
 function batchPickList(){
   const f=$('#batchForm'); const cid=f.course.value, cen=f.centre.value;
   const ss=myStudents().filter(s=>s.status==='selected'&&s.skillId===cid).sort((a,b)=>(b.prefCentre===cen)-(a.prefCentre===cen)||(b.score||0)-(a.score||0));
-  $('#pickList').innerHTML=ss.length?`<div class="tw"><table><thead><tr><th></th><th>Student ID</th><th>Name</th><th>Score</th><th>Preferred centre</th></tr></thead><tbody>${ss.map(s=>`<tr><td><input type="checkbox" class="bpick" value="${s.id}" ${(!s.prefCentre||s.prefCentre===cen)?'checked':''}></td><td class="id">${esc(s.id)}</td><td>${esc(s.name)}</td><td>${s.score??'—'}</td><td class="small">${esc(s.prefCentre||'Any')}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted small">No selected candidates for this skill.</p>';
+  $('#pickList').innerHTML=ss.length?`<div class="tw"><table><thead><tr><th></th><th>Student ID</th><th>Name</th><th>Score</th><th>Preferred centre</th></tr></thead><tbody>${ss.map(s=>`<tr><td><input type="checkbox" class="bpick" value="${esc(s.id)}" ${(!s.prefCentre||s.prefCentre===cen)?'checked':''}></td><td class="id">${esc(s.id)}</td><td>${esc(s.name)}</td><td>${s.score??'—'}</td><td class="small">${esc(s.prefCentre||'Any')}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted small">No selected candidates for this skill.</p>';
 }
 async function createBatch(f){
   const ids=$$('.bpick:checked').map(i=>i.value); const cap=+f.cap.value;
@@ -1063,13 +988,8 @@ async function createBatch(f){
   if(ids.length>cap){toast(`You picked ${ids.length} trainees but capacity is ${cap}.`);return}
   if(f.end.value<=f.start.value){toast('End date must be after the start date.');return}
   if(f.trainerId.value){const c=trainerClash(f.trainerId.value,f.start.value,f.end.value);if(c){toast(`The chosen trainer is busy with ${c.id} on those dates. Pick another or assign later.`);return}}
-  const pre=`BAT-${YEAR}-${f.course.value.replace('SKL-','')}-`; const n=list('batches').filter(b=>b.id.startsWith(pre)).length+1;
-  const id=pre+String(n).padStart(3,'0');
-  const b={id,courseId:f.course.value,centreId:f.centre.value,start:f.start.value,end:f.end.value,trainerId:f.trainerId.value,trainer:'',capacity:cap,students:ids,status:'planned',createdAt:nowISO(),createdBy:ME.name};
-  await put('batches',id,b);
-  if(b.trainerId) await notify(S.trainers[b.trainerId],'assigned',{batch:b,subject:'Batch assignment'});
-  for(const sid of ids){await setStatus(S.students[sid],'batched',`Allotted to batch ${id}`,`${centreName(b.centreId)} (${b.centreId})`,{batchId:id,centreId:b.centreId,skillId:b.courseId})}
-  toast(`Batch ${id} created with ${ids.length} trainees.`); closeModal(); render();
+  const r=await act('create_batch',{course:f.course.value,centre:f.centre.value,cap,start:f.start.value,end:f.end.value,trainerId:f.trainerId.value,ids});
+  if(r){toast(`Batch ${r.id} created with ${ids.length} trainees.`);closeModal();render()}
 }
 function openBatch(id){
   const b=S.batches[id]; const st=b.students.map(x=>S.students[x]).filter(Boolean);
@@ -1079,10 +999,8 @@ function openBatch(id){
   <div class="mf">${b.status!=='completed'&&can('training')?`<button class="btn" onclick="assignDialog('${id}')">${b.trainerId?'Change trainer':'Assign trainer'}</button>`:''}${b.status==='planned'&&can('training','centre')?`<button class="btn primary" onclick="startBatch('${id}')">Start training</button>`:''}<button class="btn" onclick="exportBatch('${id}')">Download list (CSV)</button></div>`,true);
 }
 async function startBatch(id){
-  const b=S.batches[id]; if(!b.trainerId){toast('Assign a trainer before starting the batch.');return}
-  await put('batches',id,{...b,status:'ongoing',startedAt:nowISO()});
-  for(const sid of b.students){const s=S.students[sid];if(s&&s.status==='batched')await setStatus(s,'training','Training started',`Batch ${id}`)}
-  toast('Batch started. Trainees notified.'); closeModal(); render();
+  if(!S.batches[id].trainerId){toast('Assign a trainer before starting the batch.');return}
+  if(await act('start_batch',{id},'Batch started. Trainees notified.')){closeModal();render()}
 }
 
 /* ---------- Trainers: registration, verification, empanelment, assignment ---------- */
@@ -1097,20 +1015,6 @@ const TRAINER_DOCS=[
   {key:'resume',label:'Résumé / CV',req:false},
   {key:'bank',label:'Bank passbook first page (for honorarium)',req:false}
 ];
-const TTPL={
-  submitted:t=>`Dear ${t.name}, your trainer registration ${t.id} has been received by SDE Dept, KAAC. Track it on the portal with your date of birth.`,
-  returned:(t,x)=>`Dear ${t.name}, trainer registration ${t.id} needs correction: ${x.remark||'see portal'}. Please re-upload documents on the portal.`,
-  verified:t=>`Dear ${t.name}, documents for trainer registration ${t.id} are verified. Your empanelment is under review.`,
-  empanelled:t=>`Dear ${t.name}, you are empanelled as a trainer of SDE Dept, KAAC (No. ${t.empanelNo}) for ${(t.courses||[]).length} skill(s). You will be informed when assigned to a batch.`,
-  rejected:(t,x)=>`Dear ${t.name}, trainer registration ${t.id} was not accepted. Reason: ${x.remark||'see portal'}.`,
-  inactive:t=>`Dear ${t.name}, your trainer empanelment ${t.empanelNo} is marked inactive. Contact the Training Manager for details.`,
-  assigned:(t,x)=>`Dear ${t.name}, you are assigned as trainer for batch ${x.batch.id} (${courseName(x.batch.courseId)}) at ${centreName(x.batch.centreId)} [${x.batch.centreId}], ${fmtD(x.batch.start)} to ${fmtD(x.batch.end)}.`,
-  released:(t,x)=>`Dear ${t.name}, you are no longer assigned to batch ${x.batch.id}. Contact the Training Manager for details.`
-};
-async function setTStatus(t,status,action,remark='',patch={},nk=status){
-  const nt={...t,...patch,status,history:[...(t.history||[]),{at:nowISO(),by:ME?ME.name:t.name,role:ME?ROLES[ME.role]:'Trainer',action,remark}]};
-  await put('trainers',t.id,nt); if(nk) await notify(nt,nk,{remark}); return nt;
-}
 const trainerBatches = tid => list('batches').filter(b=>b.trainerId===tid).sort((a,b)=>b.start.localeCompare(a.start));
 const eligibleTrainers = courseId => list('trainers').filter(t=>t.status==='empanelled'&&(t.courses||[]).includes(courseId));
 const trainerClash = (tid,start,end,except) => list('batches').find(b=>b.id!==except&&b.trainerId===tid&&b.status!=='completed'&&b.start<=end&&start<=b.end);
@@ -1123,7 +1027,7 @@ function vTrainerReg(){
   <p class="muted">Join the department’s trainer panel. After document verification and empanelment, trainers are assigned to batches at our centres. Fields marked <span style="color:var(--bad)">*</span> are required.</p>
   <form id="trForm" novalidate>
   <fieldset><legend>Aadhaar and contact</legend><div class="grid g3">
-    <div class="field"><label>Aadhaar number <span class="req">*</span></label><input name="aadhaar" inputmode="numeric" maxlength="14" placeholder="12-digit number" autocomplete="off"><div class="hint">Only the last 4 digits are stored on record. <a href="#" onclick="event.preventDefault();document.querySelector('#trForm [name=aadhaar]').value=testAadhaar()">Fill a test number</a></div></div>
+    <div class="field"><label>Aadhaar number <span class="req">*</span></label><input name="aadhaar" inputmode="numeric" maxlength="14" placeholder="12-digit number" autocomplete="off"><div class="hint">Only the last 4 digits are stored on record.${DEMO?` <a href="#" onclick="event.preventDefault();document.querySelector('#trForm [name=aadhaar]').value=testAadhaar()">Fill a test number</a>`:''}</div></div>
     <div class="field"><label>Mobile number <span class="req">*</span></label><input name="mobile" inputmode="numeric" maxlength="10" placeholder="10 digits"></div>
     <div class="field"><label>Email <span class="req">*</span></label><input name="email" type="email" placeholder="name@example.com"><div class="hint">Batch assignments are sent here and by SMS</div></div>
   </div></fieldset>
@@ -1154,7 +1058,7 @@ function vTrainerReg(){
     <div class="chips" style="margin-bottom:12px">${centres.map(c=>`<label class="chip" style="font-weight:500"><input type="checkbox" name="pc" value="${c.id}"> ${esc(c.name)}</label>`).join('')}</div>
   </fieldset>
   <fieldset><legend>Documents</legend>
-    <p class="small muted">Images are compressed automatically. PDFs must be under 180 KB.</p>
+    <p class="small muted">JPG, PNG or PDF. Photos are resized automatically. PDFs can be up to 2 MB.</p>
     <div class="grid g2">${TRAINER_DOCS.map(d=>`<div class="field"><label>${d.label} ${d.req?'<span class="req">*</span>':''}</label><input type="file" name="doc_${d.key}" accept="${d.img?'image/*':'image/*,application/pdf'}"></div>`).join('')}</div>
   </fieldset>
   <div class="panel flat" style="margin-bottom:16px"><label style="display:flex;gap:10px;font-weight:500"><input type="checkbox" name="declare"> I declare that the information and documents are genuine. I consent to the use of my Aadhaar number for identity verification for empanelment only.</label></div>
@@ -1184,35 +1088,25 @@ async function submitTrainer(e){
   if(!skills.length) p.push('Tick at least one skill you can teach.');
   TRAINER_DOCS.filter(d=>d.req).forEach(d=>{if(!f.elements['doc_'+d.key].files[0])p.push('Upload '+d.label.toLowerCase()+'.')});
   if(!f.elements.declare.checked) p.push('Tick the declaration to continue.');
-  if(p.length){err.innerHTML=p.map(esc).join('<br>');err.scrollIntoView({behavior:'smooth',block:'center'});return}
-  const hash=await sha256('aadhaar:'+aadhaar);
-  const dup=list('trainers').find(t=>t.aadhaarHash===hash&&t.status!=='rejected');
-  if(dup){err.textContent=`A trainer registration (${dup.id}) already exists for this Aadhaar number. Use Track application to check it.`;return}
+  if(p.length){showErrors(err,p.join('\n'));return}
   const btn=$('#trBtn'); btn.disabled=true; btn.textContent='Uploading documents…';
   try{
-    const id=nextId(`KAAC-SDE-TR-${YEAR}-`,'trainers');
-    const docs=[]; let photo='';
-    for(const d of TRAINER_DOCS){const file=f.elements['doc_'+d.key].files[0]; if(!file) continue;
-      const pf=await processFile(file); const docId=id+'-'+d.key;
-      await put('docs',docId,{id:docId,trainerId:id,key:d.key,name:file.name,type:pf.type,data:pf.data});
-      docs.push({key:d.key,label:d.label,name:file.name,type:pf.type,docId,status:'pending'});
-      if(d.key==='photo') photo=await readImage(file,160,.75);
-    }
-    const t={id,kind:'trainer',name:v('name'),father:v('father'),dob:v('dob'),gender:v('gender'),aadhaarLast4:aadhaar.slice(-4),aadhaarHash:hash,
-      mobile:v('mobile'),email:v('email'),address:v('address'),district:v('district'),pin:v('pin'),qual:v('qual'),specialisation:v('specialisation'),
-      indExp:+v('indExp'),trnExp:+v('trnExp'),totNo:v('totNo'),totBody:v('totBody'),courses:skills,sectors:[...new Set(skills.map(c=>S.courses[c]?.sectorId))],prefCentres:pcs,
-      docs,photo,status:'submitted',createdAt:nowISO(),history:[{at:nowISO(),by:v('name'),role:'Trainer',action:'Trainer registration submitted',remark:''}]};
-    await put('trainers',id,t); await notify(t,'submitted');
+    const fd=new FormData();
+    ['mobile','email','name','father','dob','gender','address','district','pin','qual','specialisation','indExp','trnExp','totNo','totBody'].forEach(n=>fd.append(n,v(n)));
+    fd.append('aadhaar',aadhaar); fd.append('declare','1');
+    skills.forEach(c=>fd.append('skill[]',c)); pcs.forEach(c=>fd.append('pc[]',c));
+    await addFiles(fd,f,TRAINER_DOCS);
+    const d=await api('trainer_register',{method:'POST',form:fd});
     route='track'; history.replaceState(null,'','#track'); render();
-    trackResult(t.id,t.dob,true);
-  }catch(ex){err.textContent=ex.message||'Could not submit. Try again.';btn.disabled=false;btn.textContent='Submit trainer registration'}
+    showTracked(d,v('dob'),true);
+  }catch(ex){showErrors(err,ex.message||'Could not submit. Try again.');btn.disabled=false;btn.textContent='Submit trainer registration'}
 }
 
 /* Trainer status page (via Track application) */
 function trainerTrackHTML(t){
   const bs=trainerBatches(t.id);
   return `<div class="grid g2"><div class="panel">
-    <div class="row" style="align-items:flex-start">${t.photo?`<img class="photo" src="${t.photo}" alt="">`:''}<div><h2 style="margin-bottom:4px">${esc(t.name)}</h2><div class="muted small">${esc(t.id)} · Trainer</div><div style="margin-top:8px">${tStatusTag(t.status)}</div></div></div>
+    <div class="row" style="align-items:flex-start">${t.photo?`<img class="photo" src="${esc(t.photo)}" alt="">`:''}<div><h2 style="margin-bottom:4px">${esc(t.name)}</h2><div class="muted small">${esc(t.id)} · Trainer</div><div style="margin-top:8px">${tStatusTag(t.status)}</div></div></div>
     <hr class="sep"><dl class="kv">${t.empanelNo?`<dt>Empanelment no.</dt><dd>${esc(t.empanelNo)}</dd>`:''}<dt>Skills</dt><dd>${(t.courses||[]).map(c=>esc(courseName(c))).join(', ')}</dd><dt>Experience</dt><dd>${t.indExp} yrs industry, ${t.trnExp} yrs training</dd></dl>
     ${bs.length?`<h3 style="margin-top:16px">Assigned batches</h3><div class="tw"><table><thead><tr><th>Batch</th><th>Skill</th><th>Centre</th><th>Dates</th><th>Status</th></tr></thead><tbody>${bs.map(b=>`<tr><td class="id">${esc(b.id)}</td><td>${esc(courseName(b.courseId))}</td><td>${esc(centreName(b.centreId))}<div class="small muted">${esc(b.centreId)}</div></td><td class="small">${fmtD(b.start)} – ${fmtD(b.end)}</td><td><span class="tag">${esc(b.status)}</span></td></tr>`).join('')}</tbody></table></div>`:''}
     ${t.status==='returned'?tResubmitHTML(t):''}
@@ -1223,21 +1117,9 @@ function tResubmitHTML(t){
   const flagged=(t.docs||[]).filter(d=>d.status==='rejected');
   const keys=flagged.length?flagged.map(d=>d.key):TRAINER_DOCS.map(d=>d.key);
   return `<hr class="sep"><h3>Correct and resubmit</h3><p class="small">${esc(t.history.slice(-1)[0]?.remark||'')}</p>
-  <form onsubmit="event.preventDefault();resubmitTrainer('${t.id}',this)">${keys.map(k=>{const d=TRAINER_DOCS.find(x=>x.key===k);return `<div class="field"><label>${d.label}</label><input type="file" name="doc_${k}" accept="image/*,application/pdf"></div>`}).join('')}
+  <form onsubmit="event.preventDefault();resubmit(this,TRAINER_DOCS)">${keys.map(k=>{const d=TRAINER_DOCS.find(x=>x.key===k);return `<div class="field"><label>${d.label}</label><input type="file" name="doc_${k}" accept="${d.img?'image/*':'image/*,application/pdf'}"></div>`}).join('')}
   <button class="btn primary">Resubmit registration</button></form>`;
 }
-async function resubmitTrainer(id,f){
-  const t=S.trainers[id]; const docs=[...t.docs]; let photo=t.photo, n=0;
-  try{for(const inp of f.querySelectorAll('input[type=file]')){const file=inp.files[0];if(!file)continue;const key=inp.name.slice(4);const pf=await processFile(file);const docId=id+'-'+key;
-    await put('docs',docId,{id:docId,trainerId:id,key,name:file.name,type:pf.type,data:pf.data});
-    const i=docs.findIndex(d=>d.key===key);const rec={key,label:TRAINER_DOCS.find(d=>d.key===key).label,name:file.name,type:pf.type,docId,status:'pending'};if(i>=0)docs[i]=rec;else docs.push(rec);
-    if(key==='photo')photo=await readImage(file,160,.75);n++}
-  }catch(ex){toast(ex.message);return}
-  if(!n){toast('Choose at least one corrected document.');return}
-  await setTStatus(t,'submitted','Resubmitted with corrected documents','',{docs,photo},null);
-  toast('Registration resubmitted.'); trackResult(id,t.dob);
-}
-
 /* Staff: trainer list, verification and empanelment */
 let trF={status:'',course:'',q:''};
 function sTrainers(){
@@ -1270,7 +1152,7 @@ function openTrainer(id){
   if(can('training')&&t.status==='inactive') actions.push(`<button class="btn primary" onclick="trainerAction('${id}','reactivate')">Reactivate</button>`);
   openModal(`<div class="mh"><h3 style="margin:0">${esc(t.name)} · ${esc(t.id)}</h3><button class="btn sm" onclick="closeModal()">Close</button></div>
   <div class="mb"><div class="grid g2">
-    <div><div class="row" style="align-items:flex-start;margin-bottom:12px">${t.photo?`<img class="photo" src="${t.photo}" alt="">`:''}<div>${tStatusTag(t.status)}<div class="small muted" style="margin-top:6px">Registered ${fmtDT(t.createdAt)}</div></div></div>
+    <div><div class="row" style="align-items:flex-start;margin-bottom:12px">${t.photo?`<img class="photo" src="${esc(t.photo)}" alt="">`:''}<div>${tStatusTag(t.status)}<div class="small muted" style="margin-top:6px">Registered ${fmtDT(t.createdAt)}</div></div></div>
       <dl class="kv"><dt>Aadhaar</dt><dd>XXXX XXXX ${esc(t.aadhaarLast4)}</dd><dt>Father / spouse</dt><dd>${esc(t.father)}</dd><dt>Date of birth</dt><dd>${fmtD(t.dob)} (age ${age(t.dob)})</dd><dt>Gender</dt><dd>${esc(t.gender)}</dd>
       <dt>Mobile / email</dt><dd>${esc(t.mobile)}<br>${esc(t.email)}</dd><dt>Address</dt><dd>${esc([t.address,t.district,t.pin].filter(Boolean).join(', '))}</dd>
       <dt>Qualification</dt><dd>${esc(t.qual)} · ${esc(t.specialisation)}</dd><dt>Experience</dt><dd>${t.indExp} yrs industry, ${t.trnExp} yrs training</dd>
@@ -1281,7 +1163,7 @@ function openTrainer(id){
       ${bs.length?`<h3 style="margin-top:16px">Batches</h3>${bs.map(b=>`<div class="small" style="padding:5px 0;border-bottom:1px dashed var(--line)"><b>${esc(b.id)}</b> · ${esc(courseName(b.courseId))} · ${esc(b.centreId)}<div class="muted">${fmtD(b.start)} – ${fmtD(b.end)} · ${esc(b.status)}</div></div>`).join('')}`:''}
     </div>
     <div><h3>Documents</h3>${(t.docs||[]).map(d=>`<div class="row" style="justify-content:space-between;padding:7px 0;border-bottom:1px dashed var(--line)"><span class="small"><b>${esc(d.label)}</b><br><span class="muted">${esc(d.name)}</span></span>
-      <span class="row" style="gap:6px">${d.status==='ok'?'<span class="tag ok">OK</span>':d.status==='rejected'?'<span class="tag bad">Incorrect</span>':''}<button class="btn sm" onclick="viewDoc('${d.docId}')">View</button>
+      <span class="row" style="gap:6px">${d.status==='ok'?'<span class="tag ok">OK</span>':d.status==='rejected'?'<span class="tag bad">Incorrect</span>':''}<button class="btn sm" onclick="viewDoc('${esc(d.docId)}','${esc(d.type)}')">View</button>
       ${can('dealing')&&t.status==='submitted'?`<button class="btn sm" onclick="markTDoc('${id}','${d.key}','ok')">OK</button><button class="btn sm danger" onclick="markTDoc('${id}','${d.key}','rejected')">Incorrect</button>`:''}</span></div>`).join('')}
       <div id="docView" style="margin-top:12px"></div>
       <h3 style="margin-top:16px">History</h3><ul class="tl">${[...(t.history||[])].reverse().map(h=>`<li><b>${esc(h.action)}</b>${h.remark?`<div class="small">${esc(h.remark)}</div>`:''}<small>${fmtDT(h.at)} · ${esc(h.by)} (${esc(h.role)})</small></li>`).join('')}</ul></div>
@@ -1289,19 +1171,13 @@ function openTrainer(id){
   ${actions.length?`<div class="field" style="margin-top:12px"><label>Remark</label><textarea id="trRemark" placeholder="Required when returning, rejecting or marking inactive"></textarea></div>`:''}
   </div>${actions.length?`<div class="mf">${actions.join('')}</div>`:''}`,true);
 }
-async function markTDoc(id,key,status){const t=S.trainers[id];await put('trainers',id,{...t,docs:t.docs.map(d=>d.key===key?{...d,status}:d)});openTrainer(id)}
-async function trainerAction(id,act){
+async function markTDoc(id,key,status){if(await act('mark_doc',{kind:'trainer',id,key,status}))openTrainer(id)}
+async function trainerAction(id,action){
   const t=S.trainers[id]; const remark=($('#trRemark')?.value||'').trim();
-  if(['reject','return','inactive'].includes(act)&&!remark){toast('Add a remark explaining the reason.');$('#trRemark').focus();return}
-  if(act==='inactive'&&trainerBatches(id).some(b=>b.status!=='completed')){toast('Reassign this trainer’s active batches first.');return}
-  if(act==='verify'){if(t.docs.some(d=>d.status==='rejected')){toast('A document is marked incorrect. Return the registration instead.');return}
-    await setTStatus(t,'verified','Documents verified',remark,{docs:t.docs.map(d=>({...d,status:'ok'}))})}
-  if(act==='return') await setTStatus(t,'returned','Returned for correction',remark);
-  if(act==='reject') await setTStatus(t,'rejected','Registration rejected',remark);
-  if(act==='empanel'){const no=t.empanelNo||nextId(`KAAC-SDE-EMP-${YEAR}-`,'trainers','empanelNo');await setTStatus(t,'empanelled','Empanelled as trainer',remark,{empanelNo:no,empanelledAt:nowISO()})}
-  if(act==='inactive') await setTStatus(t,'inactive','Marked inactive',remark);
-  if(act==='reactivate') await setTStatus(t,'empanelled','Reactivated',remark);
-  toast('Saved. Trainer notified by SMS and email.'); closeModal(); render();
+  if(['reject','return','inactive'].includes(action)&&!remark){toast('Add a remark explaining the reason.');$('#trRemark').focus();return}
+  if(action==='inactive'&&trainerBatches(id).some(b=>b.status!=='completed')){toast('Reassign this trainer’s active batches first.');return}
+  if(action==='verify'&&t.docs.some(d=>d.status==='rejected')){toast('A document is marked incorrect. Return the registration instead.');return}
+  if(await act('trainer_action',{id,act:action,remark},'Saved. Trainer notified by SMS and email.')){closeModal();render()}
 }
 
 /* Assigning trainers to batches */
@@ -1313,7 +1189,7 @@ function assignDialog(bid){
   <form class="mb" onsubmit="event.preventDefault();assignTrainer('${bid}',this)">
   <p class="small muted">${esc(courseName(b.courseId))} (${esc(b.courseId)}) at ${esc(centreName(b.centreId))} (${esc(b.centreId)}), ${fmtD(b.start)} – ${fmtD(b.end)}. Only empanelled trainers for this skill are listed. Trainers already teaching another batch on these dates can’t be chosen.</p>
   ${ts.length?`<div class="tw"><table><thead><tr><th></th><th>Trainer</th><th>Experience</th><th>Prefers this centre</th><th>Active batches</th><th>Availability</th></tr></thead><tbody>
-  ${ts.map(({t,clash,pref,active})=>`<tr><td><input type="radio" name="tid" value="${t.id}" ${clash?'disabled':''} ${b.trainerId===t.id?'checked':''} aria-label="Choose ${esc(t.name)}"></td><td>${esc(t.name)}<div class="small muted">${esc(t.id)}${t.totNo?' · ToT certified':''}</div></td><td class="small">${t.trnExp} yrs training<br>${t.indExp} yrs industry</td><td>${pref?'<span class="tag ok">Yes</span>':'—'}</td><td>${active}</td>
+  ${ts.map(({t,clash,pref,active})=>`<tr><td><input type="radio" name="tid" value="${esc(t.id)}" ${clash?'disabled':''} ${b.trainerId===t.id?'checked':''} aria-label="Choose ${esc(t.name)}"></td><td>${esc(t.name)}<div class="small muted">${esc(t.id)}${t.totNo?' · ToT certified':''}</div></td><td class="small">${t.trnExp} yrs training<br>${t.indExp} yrs industry</td><td>${pref?'<span class="tag ok">Yes</span>':'—'}</td><td>${active}</td>
     <td class="small">${clash?`<span class="tag bad">Busy</span><div class="muted">${esc(clash.id)} until ${fmtD(clash.end)}</div>`:'<span class="tag ok">Available</span>'}</td></tr>`).join('')}</tbody></table></div>`
   :'<div class="callout">No empanelled trainer is registered for this skill yet. Empanel a trainer from the Trainers page first.</div>'}
   <div class="row" style="justify-content:flex-end;margin-top:14px">${b.trainerId?`<button type="button" class="btn danger" onclick="unassignTrainer('${bid}')">Remove current trainer</button>`:''}${ts.length?`<button class="btn primary">Assign and notify trainer</button>`:''}</div></form>`,true);
@@ -1322,20 +1198,13 @@ async function assignTrainer(bid,f){
   const tid=(f.querySelector('[name=tid]:checked')||{}).value; if(!tid){toast('Choose a trainer.');return}
   const b=S.batches[bid]; if(tid===b.trainerId){closeModal();return}
   const c=trainerClash(tid,b.start,b.end,bid); if(c){toast(`This trainer is busy with ${c.id} on those dates.`);return}
-  const prev=b.trainerId;
-  const nb={...b,trainerId:tid,trainer:'',trainerLog:[...(b.trainerLog||[]),{at:nowISO(),by:ME.name,trainerId:tid,action:prev?'Trainer changed':'Trainer assigned'}]};
-  await put('batches',bid,nb);
-  if(prev&&S.trainers[prev]) await notify(S.trainers[prev],'released',{batch:nb,subject:'Batch assignment withdrawn'});
-  await notify(S.trainers[tid],'assigned',{batch:nb,subject:'Batch assignment'});
-  toast(`${S.trainers[tid].name} assigned to ${bid}. Trainer notified.`); closeModal(); render();
+  const name=S.trainers[tid].name;
+  if(await act('assign_trainer',{bid,tid},`${name} assigned to ${bid}. Trainer notified.`)){closeModal();render()}
 }
 async function unassignTrainer(bid){
-  const b=S.batches[bid]; const prev=b.trainerId; if(!prev) return;
+  const b=S.batches[bid]; if(!b.trainerId) return;
   if(b.status==='ongoing'&&!confirm('This batch is in training. Remove its trainer anyway?')) return;
-  const nb={...b,trainerId:'',trainerLog:[...(b.trainerLog||[]),{at:nowISO(),by:ME.name,trainerId:prev,action:'Trainer removed'}]};
-  await put('batches',bid,nb);
-  if(S.trainers[prev]) await notify(S.trainers[prev],'released',{batch:nb,subject:'Batch assignment withdrawn'});
-  toast('Trainer removed from batch.'); closeModal(); render();
+  if(await act('unassign_trainer',{bid},'Trainer removed from batch.')){closeModal();render()}
 }
 
 /* ---------- Results ---------- */
@@ -1349,14 +1218,11 @@ function sResults(){
     </tbody></table></div>${can('centre')?`<div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn primary">Save results and close batch</button></div>`:''}</form></div>`}).join('')||'<div class="panel">No batches in training right now. Start a planned batch from Batches.</div>'}
   ${done.length?`<h3 style="margin-top:20px">Completed batches</h3><div class="tw"><table><thead><tr><th>Batch</th><th>Skill</th><th>Passed</th><th>Not passed</th></tr></thead><tbody>${done.map(b=>{const st=b.students.map(x=>S.students[x]).filter(Boolean);const p=st.filter(s=>s.result?.result==='Pass').length;return `<tr><td class="id">${esc(b.id)}</td><td>${esc(courseName(b.courseId))}</td><td>${p}</td><td>${st.length-p}</td></tr>`}).join('')}</tbody></table></div>`:''}`;
 }
-const grade=m=>m>=85?'A+':m>=70?'A':m>=60?'B':m>=50?'C':'—';
 async function saveResults(bid,f){
   const b=S.batches[bid]; const rows=[];
-  for(const sid of b.students){const a=f['att_'+sid].value, m=f['mk_'+sid].value;if(a===''||m===''){toast('Enter attendance and marks for every trainee.');return}rows.push([sid,+a,+m])}
-  for(const [sid,a,m] of rows){const pass=a>=70&&m>=50;const s=S.students[sid];
-    await setStatus(s,pass?'passed':'failed',pass?'Passed final assessment':'Did not pass final assessment',`Attendance ${a}%, marks ${m}`,{result:{attendance:a,marks:m,grade:grade(m),result:pass?'Pass':'Fail',by:ME.name,at:nowISO()}})}
-  await put('batches',bid,{...b,status:'completed',completedAt:nowISO()});
-  toast('Results saved and batch closed.'); render();
+  for(const sid of b.students){const a=f.elements['att_'+sid].value, m=f.elements['mk_'+sid].value;if(a===''||m===''){toast('Enter attendance and marks for every trainee.');return}rows.push({sid,att:+a,marks:+m})}
+  if(!confirm('Save these results and close the batch? Results cannot be changed afterwards.')) return;
+  if(await act('save_results',{bid,rows},'Results saved and batch closed.')) render();
 }
 
 /* ---------- Certificates ---------- */
@@ -1364,15 +1230,14 @@ function sCerts(){
   const st=myStudents(); const passed=st.filter(s=>s.status==='passed'); const certs=st.filter(s=>s.cert).sort((a,b)=>b.cert.issuedAt.localeCompare(a.cert.issuedAt));
   return `<h1>Certificates</h1>
   ${can('training')?`<div class="panel" style="margin-bottom:18px"><div class="row" style="justify-content:space-between"><h3 style="margin:0">Passed, waiting for certificate (${passed.length})</h3>${passed.length?`<button class="btn primary" onclick="issueCerts(${esc(JSON.stringify(passed.map(s=>s.id)))})">Generate all certificates</button>`:''}</div>
-  <div class="tw" style="margin-top:10px"><table><thead><tr><th>Student ID</th><th>Name</th><th>Skill</th><th>Grade</th><th></th></tr></thead><tbody>${passed.map(s=>`<tr><td class="id">${esc(s.id)}</td><td>${esc(s.name)}</td><td>${esc(courseName(s.skillId))}</td><td>${esc(s.result.grade)}</td><td><button class="btn sm primary" onclick="issueCerts(['${s.id}'])">Generate</button></td></tr>`).join('')||'<tr><td colspan="5" class="muted">No one is waiting.</td></tr>'}</tbody></table></div></div>`:''}
+  <div class="tw" style="margin-top:10px"><table><thead><tr><th>Student ID</th><th>Name</th><th>Skill</th><th>Grade</th><th></th></tr></thead><tbody>${passed.map(s=>`<tr><td class="id">${esc(s.id)}</td><td>${esc(s.name)}</td><td>${esc(courseName(s.skillId))}</td><td>${esc(s.result.grade)}</td><td><button class="btn sm primary" onclick="issueCerts(['${esc(s.id)}'])">Generate</button></td></tr>`).join('')||'<tr><td colspan="5" class="muted">No one is waiting.</td></tr>'}</tbody></table></div></div>`:''}
   <h3>Issued certificates</h3><div class="tw"><table><thead><tr><th>Certificate no.</th><th>Student</th><th>Skill ID</th><th>Centre ID</th><th>Issued</th><th></th></tr></thead><tbody>
   ${certs.map(s=>`<tr><td class="id">${esc(s.cert.no)}</td><td>${esc(s.name)}<div class="small muted">${esc(s.id)}</div></td><td>${esc(s.skillId)}</td><td>${esc(s.centreId)}</td><td class="small">${fmtD(s.cert.issuedAt)}</td><td><button class="btn sm" onclick="openDoc('cert','${s.id}')">View</button></td></tr>`).join('')||'<tr><td colspan="6" class="muted">No certificates issued yet.</td></tr>'}
   </tbody></table></div>`;
 }
 async function issueCerts(ids){
-  for(const id of ids){const s=S.students[id];if(s.status!=='passed')continue;const no=nextId(`KAAC-SDE-CERT-${YEAR}-`,'students','certNo');
-    await setStatus(s,'certified','Certificate generated',no,{certNo:no,cert:{no,issuedAt:nowISO(),by:ME.name}})}
-  toast(`${ids.length} certificate(s) generated.`); render();
+  const r=await act('issue_certs',{ids});
+  if(r){toast(`${r.issued} certificate(s) generated.`);render()}
 }
 
 /* ---------- OJT letters ---------- */
@@ -1391,7 +1256,7 @@ function ojtDialog(){
   if(!certs.length){toast('No certified trainees yet. Certificates come first.');return}
   openModal(`<div class="mh"><h3 style="margin:0">Draft OJT recommendation</h3><button class="btn sm" onclick="closeModal()">Close</button></div>
   <form class="mb" onsubmit="event.preventDefault();createOjt(this)"><div class="grid g2">
-  <div class="field"><label>Trainee</label><select name="sid" required>${certs.map(s=>`<option value="${s.id}">${esc(s.name)} · ${esc(s.id)} · ${esc(courseName(s.skillId))}</option>`).join('')}</select></div>
+  <div class="field"><label>Trainee</label><select name="sid" required>${certs.map(s=>`<option value="${esc(s.id)}">${esc(s.name)} · ${esc(s.id)} · ${esc(courseName(s.skillId))}</option>`).join('')}</select></div>
   <div class="field"><label>Employer / establishment</label><input name="employer" required></div>
   <div class="field"><label>Employer address</label><input name="address" required></div>
   <div class="field"><label>OJT role</label><input name="role" required placeholder="e.g. Trainee front office associate"></div>
@@ -1400,9 +1265,8 @@ function ojtDialog(){
   </div><div class="row" style="justify-content:flex-end"><button class="btn primary">Send to Joint Secretary for signature</button></div></form>`);
 }
 async function createOjt(f){
-  const id='OJT'+Date.now().toString(36); const letterNo=nextId(`KAAC-SDE-OJT-${YEAR}-`,'ojt','letterNo');
-  await put('ojt',id,{id,letterNo,studentId:f.sid.value,employer:f.employer.value,address:f.address.value,role:f.role.value,start:f.start.value,duration:f.duration.value,status:'pending',createdAt:nowISO(),requestedBy:ME.name,requestedRole:ROLES[ME.role]});
-  toast('Letter drafted and sent for signature.'); closeModal(); render();
+  const data={sid:f.sid.value,employer:f.employer.value.trim(),address:f.address.value.trim(),role:f.role.value.trim(),start:f.start.value,duration:f.duration.value};
+  if(await act('create_ojt',data,'Letter drafted and sent for signature.')){closeModal();render()}
 }
 function signDialog(id){
   openModal(`<div class="mh"><h3 style="margin:0">Sign recommendation letter</h3><button class="btn sm" onclick="closeModal()">Close</button></div>
@@ -1412,13 +1276,9 @@ function signDialog(id){
   <div id="signErr" class="err"></div><div class="row" style="justify-content:flex-end"><button class="btn primary">Sign letter</button></div></form>`);
 }
 async function signOjt(id,f){
-  const u=S.users[ME.id]; if(u.pwHash!==await sha256(ME.id+':'+f.p.value)){$('#signErr').textContent='Password is incorrect.';return}
-  const o=S.ojt[id]; const at=nowISO(); const sig=(await sha256([o.letterNo,o.studentId,o.employer,o.start,ME.id,at].join('|'))).slice(0,20).toUpperCase();
-  const no={...o,status:'signed',signedAt:at,signedBy:ME.name,signedById:ME.id,sigRef:sig};
-  await put('ojt',id,no);
-  const s=S.students[o.studentId]; await notify(s,'ojt',no);
-  await put('students',s.id,{...s,history:[...s.history,{at,by:ME.name,role:ROLES[ME.role],action:'OJT recommendation letter signed',remark:`${no.letterNo} · ${o.employer}`}]});
-  toast('Letter signed. Trainee notified.'); closeModal(); render();
+  $('#signErr').textContent='';
+  try{await api('sign_ojt',{method:'POST',data:{id,password:f.p.value}})}catch(e){$('#signErr').textContent=e.message;return}
+  toast('Letter signed. Trainee notified.'); closeModal(); await refresh();
 }
 
 /* ---------- Mapping ---------- */
@@ -1486,23 +1346,23 @@ function editRec(coll,id){
 async function saveRec(coll,f,isNew){
   const id=f.id.value.trim().toUpperCase(); if(!/^[A-Z0-9-]+$/.test(id)){toast('IDs can use letters, numbers and hyphens only.');return}
   if(isNew&&S[coll][id]){toast('That ID already exists.');return}
-  let o={...(S[coll][id]||{}),id};
-  if(coll==='courses') Object.assign(o,{name:f.name.value,sectorId:f.sectorId.value,nsqf:+f.nsqf.value,hours:+f.hours.value,minQual:f.minQual.value,minAge:+f.minAge.value,maxAge:+f.maxAge.value,seats:+f.seats.value,active:f.active.value==='1',fee:'Free'});
+  const o={id};
+  if(coll==='courses') Object.assign(o,{name:f.name.value,sectorId:f.sectorId.value,nsqf:+f.nsqf.value,hours:+f.hours.value,minQual:f.minQual.value,minAge:+f.minAge.value,maxAge:+f.maxAge.value,seats:+f.seats.value,active:f.active.value==='1'});
   if(coll==='sectors') Object.assign(o,{name:f.name.value,desc:f.desc.value});
   if(coll==='centres') Object.assign(o,{name:f.name.value,district:f.district.value,address:f.address.value,phone:f.phone.value,capacity:+f.capacity.value,active:f.active.value==='1',sectors:[...f.querySelectorAll('[name=sec]:checked')].map(i=>i.value)});
-  await put(coll,id,o); toast('Saved.'); closeModal(); render();
+  if(await act('save_master',{coll,isNew,data:o},'Saved.')){closeModal();render()}
 }
 async function removeRec(coll,id){
   if(coll==='sectors'&&list('courses').some(c=>c.sectorId===id)){toast('Move or delete this sector’s courses first.');return}
-  if(coll==='courses'&&list('students').some(s=>s.pref1===id||s.skillId===id)){toast('Students are linked to this course. Mark it inactive instead.');return}
-  await del(coll,id); toast('Deleted.'); closeModal(); render();
+  if(!confirm('Delete this record? This cannot be undone.')) return;
+  if(await act('remove_master',{coll,id},'Deleted.')){closeModal();render()}
 }
 
 /* ---------- Users ---------- */
 function sUsers(){
   return `<h1>Users & roles</h1><div class="row" style="margin-bottom:14px"><span class="muted">Each officer logs in with their own account. Centre Managers see only their centre.</span><button class="btn primary" style="margin-left:auto" onclick="editUser()">Add user</button></div>
-  <div class="tw"><table><thead><tr><th>Username</th><th>Name</th><th>Role</th><th>Centre</th><th>Status</th><th></th></tr></thead><tbody>
-  ${list('users').sort((a,b)=>a.role.localeCompare(b.role)).map(u=>`<tr><td class="id">${esc(u.id)}</td><td>${esc(u.name)}</td><td>${ROLES[u.role]}</td><td>${esc(u.centreId||'—')}</td><td>${u.active?'<span class="tag ok">Active</span>':'<span class="tag">Disabled</span>'}</td><td><button class="btn sm" onclick="editUser('${u.id}')">Edit</button></td></tr>`).join('')}
+  <div class="tw"><table><thead><tr><th>Username</th><th>Name</th><th>Role</th><th>Centre</th><th>Last login</th><th>Status</th><th></th></tr></thead><tbody>
+  ${list('users').sort((a,b)=>a.role.localeCompare(b.role)).map(u=>`<tr><td class="id">${esc(u.id)}</td><td>${esc(u.name)}</td><td>${ROLES[u.role]}</td><td>${esc(u.centreId||'—')}</td><td class="small">${u.lastLogin?fmtDT(u.lastLogin):'Never'}</td><td>${u.active?'<span class="tag ok">Active</span>':'<span class="tag">Disabled</span>'}</td><td><button class="btn sm" onclick="editUser('${esc(u.id)}')">Edit</button></td></tr>`).join('')}
   </tbody></table></div>`;
 }
 function editUser(id){
@@ -1513,7 +1373,7 @@ function editUser(id){
   <div class="field"><label>Full name</label><input name="name" value="${esc(u?.name||'')}" required></div>
   <div class="field"><label>Role</label><select name="role">${Object.entries(ROLES).map(([k,v])=>`<option value="${k}" ${u?.role===k?'selected':''}>${v}</option>`).join('')}</select></div>
   <div class="field"><label>Centre (Centre Manager only)</label><select name="centreId"><option value="">—</option>${list('centres').map(c=>`<option value="${c.id}" ${u?.centreId===c.id?'selected':''}>${esc(c.name)} (${c.id})</option>`).join('')}</select></div>
-  <div class="field"><label>${u?'New password (leave blank to keep)':'Password'}</label><input name="pw" type="password" ${u?'':'required'} minlength="8" autocomplete="new-password"></div>
+  <div class="field"><label>${u?'New password (leave blank to keep)':'Password'}</label><input name="pw" type="password" ${u?'':'required'} minlength="10" autocomplete="new-password"><div class="hint">At least 10 characters, with letters and numbers.</div></div>
   <div class="field"><label>Status</label><select name="active"><option value="1">Active</option><option value="0" ${u&&!u.active?'selected':''}>Disabled</option></select></div>
   </div><div class="row" style="justify-content:flex-end"><button class="btn primary">Save user</button></div></form>`);
 }
@@ -1522,9 +1382,23 @@ async function saveUser(f,isNew){
   if(isNew&&S.users[id]){toast('That username is taken.');return}
   if(f.role.value==='centre'&&!f.centreId.value){toast('Choose a centre for the Centre Manager.');return}
   if(id===ME.id&&f.active.value==='0'){toast('You cannot disable your own account.');return}
-  const o={...(S.users[id]||{}),id,name:f.name.value,role:f.role.value,centreId:f.role.value==='centre'?f.centreId.value:'',active:f.active.value==='1'};
-  if(f.pw.value) o.pwHash=await sha256(id+':'+f.pw.value);
-  await put('users',id,o); toast('User saved.'); closeModal(); render();
+  const data={isNew,id,name:f.name.value.trim(),role:f.role.value,centreId:f.role.value==='centre'?f.centreId.value:'',active:f.active.value==='1',pw:f.pw.value};
+  if(await act('save_user',data,'User saved.')){closeModal();render()}
+}
+/* Any officer can change their own password. */
+function passwordDialog(){
+  openModal(`<div class="mh"><h3 style="margin:0">Change my password</h3><button class="btn sm" onclick="closeModal()">Close</button></div>
+  <form class="mb" onsubmit="event.preventDefault();changePassword(this)">
+  <div class="field"><label>Current password</label><input name="current" type="password" required autocomplete="current-password"></div>
+  <div class="field"><label>New password</label><input name="pw" type="password" required minlength="10" autocomplete="new-password"><div class="hint">At least 10 characters, with letters and numbers.</div></div>
+  <div class="field"><label>Repeat new password</label><input name="pw2" type="password" required autocomplete="new-password"></div>
+  <div id="pwErr" class="err"></div><div class="row" style="justify-content:flex-end"><button class="btn primary">Change password</button></div></form>`);
+}
+async function changePassword(f){
+  const err=$('#pwErr'); err.textContent='';
+  if(f.pw.value!==f.pw2.value){err.textContent='The new passwords do not match.';return}
+  try{await api('change_password',{method:'POST',data:{current:f.current.value,pw:f.pw.value}});toast('Password changed.');closeModal()}
+  catch(e){err.textContent=e.message}
 }
 
 /* ---------- Settings ---------- */
@@ -1538,7 +1412,7 @@ function sSettings(){
   <div class="field"><label>Joint Secretary’s name (printed on OJT letters)</label><input name="jtsName" value="${esc(s.jtsName)}"></div>
   <div class="field"><label>Signatory designation</label><input name="jtsDesignation" value="${esc(s.jtsDesignation)}"></div></div>
   <h3>Website</h3><div class="grid g2">
-  <div class="field"><label>Council logo</label><div class="row"><span class="logo-slot" style="width:56px;height:56px"><img src="${s.logo||LOGO_KAACLOGO}" alt=""></span><input type="file" id="logoFile" accept="image/*" style="max-width:260px"></div>
+  <div class="field"><label>Council logo</label><div class="row"><span class="logo-slot" style="width:56px;height:56px"><img src="${esc(s.logo||LOGO_KAACLOGO)}" alt=""></span><input type="file" id="logoFile" accept="image/*" style="max-width:260px"></div>
     <div class="hint">The KAAC logo is used by default. Upload a different one only if needed. <label style="display:inline;font-weight:500"><input type="checkbox" id="logoRemove"> Remove current logo</label></div></div>
   <div class="field"><label>Helpline phone</label><input name="phone" value="${esc(s.phone)}"></div>
   <div class="field"><label>Contact email</label><input name="email" value="${esc(s.email)}"></div>
@@ -1547,22 +1421,22 @@ function sSettings(){
   <h3>Aptitude test defaults</h3><div class="grid g2">
   <div class="field"><label>Default venue</label><input name="defaultVenue" value="${esc(s.defaultVenue)}"></div>
   <div class="field"><label>Default reporting time</label><input name="defaultTime" value="${esc(s.defaultTime)}"></div></div>
-  <h3>Notifications</h3><p class="small muted">Record the gateway details here. Actual sending requires a server-side connector holding the API keys — never put secret keys in this page.</p><div class="grid g3">
+  <h3>Notifications</h3><p class="small muted">Record the gateway details here. Sending needs the gateway’s API keys configured on the server (see README) — never put secret keys in this page.</p><div class="grid g3">
   <div class="field"><label>SMS sender ID (DLT header)</label><input name="smsSender" value="${esc(s.smsSender)}" placeholder="e.g. KAACSD"></div>
   <div class="field"><label>SMS gateway name</label><input name="smsGateway" value="${esc(s.smsGateway)}" placeholder="Leave blank if not connected"></div>
   <div class="field"><label>Email sender address</label><input name="emailFrom" value="${esc(s.emailFrom)}" placeholder="Leave blank if not connected"></div></div>
   <h3>Fallback highlights</h3><div class="field"><label>Shown in the ticker only when no notices are published (one per line)</label><textarea name="notices" rows="4">${esc(s.notices)}</textarea></div>
   <button class="btn primary">Save settings</button></form>`;
 }
-async function saveSettings(f){const o={...settings(),id:'main'};[...f.elements].forEach(el=>{if(el.name)o[el.name]=el.value});
-  const lf=$('#logoFile').files[0]; if(lf){try{o.logo=await readImage(lf,240,.92,'image/png')}catch(e){toast('Could not read the logo image.');return}} else if($('#logoRemove').checked) o.logo='';
-  await put('settings','main',o);toast('Settings saved.');render()}
+async function saveSettings(f){const o={};[...f.elements].forEach(el=>{if(el.name)o[el.name]=el.value});
+  const lf=$('#logoFile').files[0]; if(lf){try{o.logo=await readImage(lf,240,.92,'image/png')}catch(e){toast('Could not read the logo image.');return}} else if($('#logoRemove').checked) o.logoRemove=true;
+  if(await act('save_settings',o,'Settings saved.')) render()}
 
 /* ---------- CSV export ---------- */
-async function saveFile(filename,data){
-  let dl=null; try{dl=window.claude?.use?await window.claude.use('downloads'):null}catch(e){}
-  if(dl){try{await dl.save({filename,data});return}catch(e){if(e.code!=='declined')toast('Download not available here: '+(e.message||e.code));return}}
-  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data]));a.download=filename;document.body.appendChild(a);a.click();a.remove();
+function saveFile(filename,data){
+  const url=URL.createObjectURL(new Blob([data]));
+  const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),10000);
 }
 const csvCell=v=>`"${String(v??'').replace(/"/g,'""')}"`;
 function exportCSV(){
@@ -1592,7 +1466,10 @@ const DOC_CSS=`
 .d .qr svg{width:84px;height:84px}
 `;
 function qrSVG(text){try{const q=qrcode(0,'M');q.addData(text);q.make();return q.createSvgTag(3,2)}catch(e){return ''}}
-function letterhead(){const s=settings();return `<div class="wv"></div><div class="lh"><img src="${s.logo||LOGO_KAACLOGO}" alt="" style="width:62px;height:62px;object-fit:contain;flex:none"><div><b>${esc(s.deptName)}</b><span>${esc(s.council)} · ${esc(s.address)}</span></div></div>`}
+/* Absolute URLs, so downloaded copies of these documents still show the logo. */
+const absUrl = u => new URL(u, location.href).href;
+const docLogo = () => esc(settings().logo || absUrl(LOGO_KAACLOGO));
+function letterhead(){const s=settings();return `<div class="wv"></div><div class="lh"><img src="${docLogo()}" alt="" style="width:62px;height:62px;object-fit:contain;flex:none"><div><b>${esc(s.deptName)}</b><span>${esc(s.council)} · ${esc(s.address)}</span></div></div>`}
 function docAdmit(s){
   return `<div class="d">${letterhead()}<div class="ttl">ADMIT CARD — Aptitude Test &amp; Counselling, ${YEAR}</div>
   <div style="display:flex;gap:18px;align-items:flex-start"><table style="flex:1">
@@ -1601,21 +1478,21 @@ function docAdmit(s){
    <tr><td class="k">Date of birth</td><td>${fmtD(s.dob)}</td></tr><tr><td class="k">Aadhaar</td><td>XXXX XXXX ${esc(s.aadhaarLast4)}</td></tr>
    <tr><td class="k">Course applied</td><td>${esc(courseName(s.pref1))} (${esc(s.pref1)})</td></tr><tr><td class="k">Category</td><td>${esc(s.category)}</td></tr>
    <tr><td class="k">Test date &amp; time</td><td><b>${fmtD(s.admit.date)}, ${esc(s.admit.time)}</b></td></tr><tr><td class="k">Venue</td><td><b>${esc(s.admit.venue)}</b></td></tr></table>
-   <div style="text-align:center;padding-top:14px">${s.photo?`<img src="${s.photo}" style="width:110px;height:136px;object-fit:cover;border:1px solid #999">`:'<div style="width:110px;height:136px;border:1px dashed #999;font-size:11px;display:flex;align-items:center;justify-content:center">Affix photo</div>'}<div class="qr" style="margin-top:8px">${qrSVG('KAAC-SDE ADMIT '+s.admit.no+' '+s.id)}</div></div></div>
+   <div style="text-align:center;padding-top:14px">${s.photo?`<img src="${esc(s.photo)}" style="width:110px;height:136px;object-fit:cover;border:1px solid #999">`:'<div style="width:110px;height:136px;border:1px dashed #999;font-size:11px;display:flex;align-items:center;justify-content:center">Affix photo</div>'}<div class="qr" style="margin-top:8px">${qrSVG('KAAC-SDE ADMIT '+s.admit.no+' '+s.id)}</div></div></div>
   <b style="font-size:13px">Instructions</b><ol><li>Report 30 minutes before the reporting time with this admit card.</li><li>Bring your original Aadhaar card and qualification certificate for verification.</li><li>Mobile phones are not allowed in the test hall.</li><li>This admit card does not guarantee selection. Selection depends on the test and counselling.</li></ol>
   <div class="sig"><div><div class="ln">Signature of candidate</div></div><div><div class="small">Issued electronically on ${fmtD(s.admit.issuedAt)}</div><div class="ln">${esc(s.admit.by||'')}<br>Supervising Officer</div></div></div></div>`;
 }
 function docCert(s){
   const c=S.courses[s.skillId]||{}; const b=S.batches[s.batchId]||{}; const st=settings();
   return `<div class="d cert"><div class="wv"></div><div class="in">
-  <img src="${st.logo||LOGO_KAACLOGO}" alt="" style="display:block;margin:0 auto 8px;width:78px;height:78px;object-fit:contain">
+  <img src="${docLogo()}" alt="" style="display:block;margin:0 auto 8px;width:78px;height:78px;object-fit:contain">
   <div style="font:600 15px 'Source Serif 4',Georgia,serif">${esc(st.deptName)}</div><div class="small">${esc(st.council)}</div>
   <h1 style="font-size:32px;margin:22px 0 4px;color:#1A2321">Certificate of Skill Training</h1><div class="small">Certificate no. ${esc(s.cert.no)}</div>
   <p style="margin-top:22px">This is to certify that</p><div class="name">${esc(s.name)}</div>
   <p>${s.gender==='Female'?'daughter':s.gender==='Male'?'son':'child'} of ${esc(s.father)}, Student ID ${esc(s.id)}, has successfully completed the training programme in</p>
   <div style="font:600 21px 'Source Serif 4',Georgia,serif;margin:4px 0">${esc(c.name||s.skillId)}</div>
   <p>Skill ID ${esc(s.skillId)} · NSQF Level ${esc(c.nsqf||'')} · ${esc(c.hours||'')} hours<br>at ${esc(centreName(s.centreId))} (Centre ID ${esc(s.centreId)}), batch ${esc(s.batchId)}, from ${fmtD(b.start)} to ${fmtD(b.end)},<br>and has been awarded <b>Grade ${esc(s.result?.grade||'')}</b>.</p>
-  <div class="sig" style="margin-top:40px"><div class="qr">${qrSVG('KAAC-SDE CERT '+s.cert.no)}<div class="small">Verify at the portal</div></div>
+  <div class="sig" style="margin-top:40px"><div class="qr">${qrSVG(absUrl('#verify/'+encodeURIComponent(s.cert.no)))}<div class="small">Scan to verify on the portal</div></div>
   <div><div class="small">Date of issue: ${fmtD(s.cert.issuedAt)}</div><div class="ln">${esc(s.cert.by||'')}<br>Training Manager</div></div></div></div><div class="wv"></div></div>`;
 }
 function docOjt(o){
@@ -1634,13 +1511,15 @@ function docOjt(o){
   <p class="small" style="margin-top:24px">Copy to: ${esc(centreName(s.centreId))}, for information. · The candidate, for information.</p></div>`;
 }
 let currentDoc=null;
-function openDoc(kind,id,preview){
+async function openDoc(kind,id,preview){
   let html,name;
+  // Staff lists carry a link to the photo; fetch the record with the photo itself so printed and downloaded copies include it.
+  if(kind==='admit'&&ME&&S.students[id]?.photo&&!S.students[id].photo.startsWith('data:')){try{const r=await api('student',{query:{id}});S.students[id]={...S.students[id],photo:r.student.photo}}catch(e){}}
   if(kind==='admit'){const s=S.students[id];html=docAdmit(s);name=`Admit-card-${s.admit.no}`}
   if(kind==='cert'){const s=S.students[id];html=docCert(s);name=`Certificate-${s.cert.no}`}
   if(kind==='ojt'){const o=S.ojt[id];html=docOjt(o);name=`OJT-letter-${o.letterNo}`}
   currentDoc={html,name};
-  openModal(`<div class="mh"><h3 style="margin:0">${esc(name.replace(/-/g,' ').replace(/^(\w+) (\w+)/,'$1 $2'))}</h3><button class="btn sm" onclick="${preview?`signDialog('${id}')`:'closeModal()'}">${preview?'Back':'Close'}</button></div>
+  openModal(`<div class="mh"><h3 style="margin:0">${esc(name.replace(/-/g,' ').replace(/^(\w+) (\w+)/,'$1 $2'))}</h3><button class="btn sm" onclick="${preview?`signDialog('${esc(id)}')`:'closeModal()'}">${preview?'Back':'Close'}</button></div>
   <div class="mb"><div class="docpreview"><style>${DOC_CSS}</style>${html}</div></div>
   <div class="mf"><button class="btn" onclick="printDoc()">Print</button><button class="btn primary" onclick="downloadDoc()">Download</button></div>`,true);
 }
@@ -1651,5 +1530,11 @@ function downloadDoc(){
 }
 
 /* ============================== Start ============================== */
-readHash();
-initStore();
+async function init(){
+  LOAD_ERROR=''; render();
+  try{await loadPublic()}
+  catch(e){LOAD_ERROR=e.message;render();return}
+  try{const m=await api('me');if(m.me){ME=m.me;await loadStaff()}}catch(e){ME=null}
+  LOADED=true; readHash();
+}
+init();

@@ -1,0 +1,456 @@
+{
+  "sectors": [
+    {
+      "id": "IT",
+      "name": "IT & ITeS",
+      "desc": "Computer operations, customer service and software basics"
+    },
+    {
+      "id": "HOS",
+      "name": "Hospitality",
+      "desc": "Hotels, restaurants and food service"
+    },
+    {
+      "id": "TOU",
+      "name": "Tourism",
+      "desc": "Guiding and visitor services for Karbi Anglong’s heritage and hill tourism"
+    },
+    {
+      "id": "HLT",
+      "name": "Healthcare",
+      "desc": "Patient care and home health"
+    },
+    {
+      "id": "CON",
+      "name": "Construction",
+      "desc": "Electrical and plumbing trades"
+    },
+    {
+      "id": "ELE",
+      "name": "Electronics & Solar",
+      "desc": "Repair, installation and renewable energy"
+    },
+    {
+      "id": "AUT",
+      "name": "Automotive",
+      "desc": "Vehicle servicing"
+    },
+    {
+      "id": "AGR",
+      "name": "Agriculture & Food Processing",
+      "desc": "Organic farming, ginger, turmeric and value addition"
+    },
+    {
+      "id": "APP",
+      "name": "Apparel & Handloom",
+      "desc": "Traditional weaving and tailoring"
+    },
+    {
+      "id": "BWS",
+      "name": "Beauty & Wellness",
+      "desc": "Beauty and personal care services"
+    }
+  ],
+  "courses": [
+    {
+      "id": "SKL-IT-01",
+      "sectorId": "IT",
+      "name": "Domestic Data Entry Operator",
+      "nsqf": 4,
+      "hours": 400,
+      "minQual": "Class 10",
+      "minAge": 18,
+      "maxAge": 35,
+      "seats": 30,
+      "fee": "Free",
+      "active": true
+    },
+    {
+      "id": "SKL-IT-02",
+      "sectorId": "IT",
+      "name": "CRM Domestic Voice",
+      "nsqf": 4,
+      "hours": 400,
+      "minQual": "Class 12",
+      "minAge": 18,
+      "maxAge": 35,
+      "seats": 30,
+      "fee": "Free",
+      "active": true
+    },
+    {
+      "id": "SKL-IT-03",
+      "sectorId": "IT",
+      "name": "Junior Software Developer",
+      "nsqf": 4,
+      "hours": 600,
+      "minQual": "Class 12",
+      "minAge": 18,
+      "maxAge": 30,
+      "seats": 25,
+      "fee": "Free",
+      "active": true
+    },
+    {
+      "id": "SKL-HOS-01",
+      "sectorId": "HOS",
+      "name": "Food & Beverage Service Steward",
+      "nsqf": 4,
+      "hours": 390,
+      "minQual": "Class 10",
+      "minAge": 18,
+      "maxAge": 35,
+      "seats": 30,
+      "fee": "Free",
+      "active": true
+    },
+    {
+      "id": "SKL-HOS-02",
+      "sectorId": "HOS",
+      "name": "Front Office Associate",
+      "nsqf": 4,
+      "hours": 450,
+      "minQual": "Class 12",
+      "minAge": 18,
+      "maxAge": 35,
+      "seats": 25,
+      "fee": "Free",
+      "active": true
+    },
+    {
+      "id": "SKL-HOS-03",
+      "sectorId": "HOS",
+      "name": "Multi Cuisine Cook",
+      "nsqf": 4,
+      "hours": 450,
+      "minQual": "Class 8",
+      "minAge": 18,
+      "maxAge": 40,
+      "seats": 25,
+      "fee": "Free",
+      "active": true
+    },
+    {
+      "id": "SKL-TOU-01",
+      "sectorId": "TOU",
+      "name": "Local Tour Guide",
+      "nsqf": 4,
+      "hours": 300,
+      "minQual": "Class 10",
+      "minAge": 18,
+      "maxAge": 40,
+      "seats": 25,
+      "fee": "Free",
+      "active": true
+    },
+    {
+      "id": "SKL-HLT-01",
+      "sectorId": "HLT",
+      "name": "General Duty Assistant",
+      "nsqf": 4,
+      "hours": 420,
+      "minQual": "Class 10",
+      "minAge": 18,
+      "maxAge": 35,
+      "seats": 30,
+      "fee": "Free",
+      "active": true
+    },
+    {
+      "id": "SKL-HLT-02",
+      "sectorId": "HLT",
+      "name": "Home Health Aide",
+      "nsqf": 4,
+      "hours": 300,
+      "minQual": "Class 8",
+      "minAge": 18,
+      "maxAge": 40,
+      "seats": 30,
+      "fee": "Free",
+      "active": true
+    },
+    {
+      "id": "SKL-CON-01",
+      "sectorId": "CON",
+      "name": "Assistant Electrician",
+      "nsqf": 3,
+      "hours": 360,
+      "minQual": "Class 8",
+      "minAge": 18,
+      "maxAge": 40,
+      "seats": 30,
+      "fee": "Free",
+      "active": true
+    },
+    {
+      "id": "SKL-CON-02",
+      "sectorId": "CON",
+      "name": "Plumber (General)",
+      "nsqf": 3,
+      "hours": 360,
+      "minQual": "Class 8",
+      "minAge": 18,
+      "maxAge": 40,
+      "seats": 30,
+      "fee": "Free",
+      "active": true
+    },
+    {
+      "id": "SKL-ELE-01",
+      "sectorId": "ELE",
+      "name": "Solar PV Installer",
+      "nsqf": 4,
+      "hours": 300,
+      "minQual": "Class 10",
+      "minAge": 18,
+      "maxAge": 35,
+      "seats": 25,
+      "fee": "Free",
+      "active": true
+    },
+    {
+      "id": "SKL-ELE-02",
+      "sectorId": "ELE",
+      "name": "Mobile Phone Hardware Repair Technician",
+      "nsqf": 4,
+      "hours": 400,
+      "minQual": "Class 10",
+      "minAge": 18,
+      "maxAge": 35,
+      "seats": 25,
+      "fee": "Free",
+      "active": true
+    },
+    {
+      "id": "SKL-AUT-01",
+      "sectorId": "AUT",
+      "name": "Two-Wheeler Service Technician",
+      "nsqf": 4,
+      "hours": 390,
+      "minQual": "Class 8",
+      "minAge": 18,
+      "maxAge": 35,
+      "seats": 25,
+      "fee": "Free",
+      "active": true
+    },
+    {
+      "id": "SKL-AGR-01",
+      "sectorId": "AGR",
+      "name": "Organic Grower (Ginger & Turmeric)",
+      "nsqf": 4,
+      "hours": 240,
+      "minQual": "Class 5",
+      "minAge": 18,
+      "maxAge": 45,
+      "seats": 40,
+      "fee": "Free",
+      "active": true
+    },
+    {
+      "id": "SKL-AGR-02",
+      "sectorId": "AGR",
+      "name": "Fruit & Vegetable Processing Technician",
+      "nsqf": 4,
+      "hours": 300,
+      "minQual": "Class 8",
+      "minAge": 18,
+      "maxAge": 45,
+      "seats": 30,
+      "fee": "Free",
+      "active": true
+    },
+    {
+      "id": "SKL-APP-01",
+      "sectorId": "APP",
+      "name": "Handloom Weaver (Traditional Karbi Textiles)",
+      "nsqf": 3,
+      "hours": 300,
+      "minQual": "Class 5",
+      "minAge": 18,
+      "maxAge": 45,
+      "seats": 30,
+      "fee": "Free",
+      "active": true
+    },
+    {
+      "id": "SKL-APP-02",
+      "sectorId": "APP",
+      "name": "Self-Employed Tailor",
+      "nsqf": 4,
+      "hours": 390,
+      "minQual": "Class 5",
+      "minAge": 18,
+      "maxAge": 45,
+      "seats": 30,
+      "fee": "Free",
+      "active": true
+    },
+    {
+      "id": "SKL-BWS-01",
+      "sectorId": "BWS",
+      "name": "Assistant Beauty Therapist",
+      "nsqf": 4,
+      "hours": 350,
+      "minQual": "Class 10",
+      "minAge": 18,
+      "maxAge": 35,
+      "seats": 25,
+      "fee": "Free",
+      "active": true
+    }
+  ],
+  "centres": [
+    {
+      "id": "KAAC-C-001",
+      "name": "Diphu Skill Centre",
+      "address": "Near District Library, Diphu",
+      "district": "Karbi Anglong",
+      "sectors": [
+        "IT",
+        "HOS",
+        "HLT",
+        "BWS"
+      ],
+      "capacity": 240,
+      "phone": "",
+      "active": true
+    },
+    {
+      "id": "KAAC-C-002",
+      "name": "Hamren Skill Centre",
+      "address": "Hamren Town",
+      "district": "West Karbi Anglong",
+      "sectors": [
+        "IT",
+        "CON",
+        "AGR",
+        "APP"
+      ],
+      "capacity": 180,
+      "phone": "",
+      "active": true
+    },
+    {
+      "id": "KAAC-C-003",
+      "name": "Bokajan Skill Centre",
+      "address": "Bokajan",
+      "district": "Karbi Anglong",
+      "sectors": [
+        "AUT",
+        "CON",
+        "ELE",
+        "HOS"
+      ],
+      "capacity": 160,
+      "phone": "",
+      "active": true
+    },
+    {
+      "id": "KAAC-C-004",
+      "name": "Howraghat Rural Skill Centre",
+      "address": "Howraghat",
+      "district": "Karbi Anglong",
+      "sectors": [
+        "AGR",
+        "APP",
+        "TOU",
+        "BWS"
+      ],
+      "capacity": 150,
+      "phone": "",
+      "active": true
+    },
+    {
+      "id": "KAAC-C-005",
+      "name": "Donka Skill Centre",
+      "address": "Donka, Kheroni",
+      "district": "West Karbi Anglong",
+      "sectors": [
+        "IT",
+        "ELE",
+        "HLT"
+      ],
+      "capacity": 140,
+      "phone": "",
+      "active": true
+    }
+  ],
+  "settings": {
+    "id": "main",
+    "deptName": "Skill Development & Entrepreneurship Department",
+    "council": "Karbi Anglong Autonomous Council",
+    "address": "Diphu, Karbi Anglong, Assam – 782460",
+    "jtsName": "Dr. Bidyut Terang",
+    "jtsDesignation": "Joint Secretary",
+    "defaultVenue": "Diphu Skill Centre, Diphu",
+    "defaultTime": "10:00 AM",
+    "phone": "",
+    "email": "",
+    "officeHours": "10:00 AM – 4:00 PM, Monday to Friday (except holidays)",
+    "logo": "",
+    "aboutText": "The Skill Development & Entrepreneurship Department of the Karbi Anglong Autonomous Council works to give the youth of Karbi Anglong and West Karbi Anglong the skills they need for jobs and self-employment.\nThe department runs free, short-term training courses in sectors such as IT, hospitality, healthcare, construction, agriculture and traditional handloom, through skill centres across the two districts. Training follows national skill standards (NSQF), and every trainee who passes the final assessment receives a certificate that employers can verify online.\nAfter certification, the department helps trainees take the next step through on-the-job training with employers and support for starting their own small enterprises.",
+    "smsSender": "",
+    "smsGateway": "",
+    "emailFrom": "",
+    "notices": "Registration is open for all courses for the current session.\nCarry the printed admit card and original Aadhaar to the aptitude test."
+  },
+  "demoUsers": [
+    {
+      "id": "admin",
+      "pw": "Admin@123",
+      "name": "System Administrator",
+      "role": "admin",
+      "centreId": ""
+    },
+    {
+      "id": "dealing",
+      "pw": "Deal@123",
+      "name": "Arjun Teron",
+      "role": "dealing",
+      "centreId": ""
+    },
+    {
+      "id": "supervising",
+      "pw": "Super@123",
+      "name": "Monica Ingti",
+      "role": "supervising",
+      "centreId": ""
+    },
+    {
+      "id": "monitoring",
+      "pw": "Monitor@123",
+      "name": "Ramesh Timung",
+      "role": "monitoring",
+      "centreId": ""
+    },
+    {
+      "id": "training",
+      "pw": "Train@123",
+      "name": "Joseph Rongpi",
+      "role": "training",
+      "centreId": ""
+    },
+    {
+      "id": "jtsecy",
+      "pw": "Jts@123",
+      "name": "Dr. Bidyut Terang",
+      "role": "jts",
+      "centreId": ""
+    },
+    {
+      "id": "centre1",
+      "pw": "Centre@123",
+      "name": "Lily Hanse",
+      "role": "centre",
+      "centreId": "KAAC-C-001"
+    },
+    {
+      "id": "centre2",
+      "pw": "Centre@123",
+      "name": "Sarbajit Engti",
+      "role": "centre",
+      "centreId": "KAAC-C-002"
+    }
+  ]
+}
