@@ -697,3 +697,10 @@ body.is-home .lt-navrow{box-shadow:0 3px 0 var(--saffron)}
 :root[data-theme="dark"] .lt-top .gov-logos,:root[data-theme="dark"] .sh .gov-logos{background:#fff;border-radius:10px;padding:4px 10px}
 @media (max-width:1020px){.lt-top .gov-logos img:first-child,.lt-top .gov-logos .vd{display:none}}
 @media (max-width:640px){.lt-top .gov-logos{display:none}.sh .gov-logos{display:none}}
+
+/* ===== Welcome banner and heritage photos ===== */
+.welcome-banner{display:block;width:100%;height:auto;border-radius:22px;box-shadow:0 16px 36px rgba(16,40,30,.18);background:#cfe3f2}
+.heritage-gallery{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:18px}
+.heritage-gallery .hg{margin:0;position:relative;aspect-ratio:3/2;border-radius:18px;overflow:hidden;background-size:cover;background-position:center;box-shadow:0 10px 26px var(--sh)}
+.heritage-gallery figcaption{position:absolute;left:0;right:0;bottom:0;padding:28px 18px 14px;color:#fff;font-weight:600;font-size:14.5px;background:linear-gradient(180deg,transparent,rgba(0,0,0,.65))}
+@media (max-width:640px){.heritage-gallery{grid-template-columns:1fr}.welcome-banner{border-radius:14px}}

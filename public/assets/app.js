@@ -6,8 +6,10 @@ const IMG_RENDER="assets/img/render.jpg";
 const IMG_PEOPLE="assets/img/people.jpg";
 const IMG_MUSEUM="assets/img/museum.jpg";
 const IMG_GAMSA="assets/img/gamsa.png";
-const PH_BG={recruitment:'bg-people',skillindia:'bg-render',learn:'bg-museum',jobs:'bg-gate',courses:'bg-render',register:'bg-gate',trainer:'bg-render',track:'bg-museum',verify:'bg-gate',notices:'bg-render',about:'bg-museum',contact:'bg-gate',login:'bg-museum'};
-(function(){const s=document.createElement('style');s.textContent=`.bg-gate{background-image:url(${IMG_GATE})!important}.bg-render{background-image:url(${IMG_RENDER})!important}.bg-people{background-image:url(${IMG_PEOPLE})!important}.bg-museum{background-image:url(${IMG_MUSEUM})!important}.bg-gamsa{background-image:url(${IMG_GAMSA})!important}`;document.head.appendChild(s)})();
+const IMG_WELCOME="assets/img/welcome-cem.jpg", IMG_DANCE1="assets/img/dance-procession.jpg", IMG_DANCE2="assets/img/dance-group.jpg";
+const WELCOME_ALT="Skill Karbi Anglong: Dr. Tuliram Ronghang, Hon’ble Chief Executive Member, Karbi Anglong Autonomous Council, welcomes you to Skill Karbi Anglong";
+const PH_BG={recruitment:'bg-people',skillindia:'bg-render',learn:'bg-museum',jobs:'bg-gate',courses:'bg-render',register:'bg-gate',trainer:'bg-render',track:'bg-museum',verify:'bg-gate',notices:'bg-dance2',about:'bg-dance1',contact:'bg-gate',login:'bg-museum'};
+(function(){const s=document.createElement('style');s.textContent=`.bg-gate{background-image:url(${IMG_GATE})!important}.bg-render{background-image:url(${IMG_RENDER})!important}.bg-people{background-image:url(${IMG_PEOPLE})!important}.bg-museum{background-image:url(${IMG_MUSEUM})!important}.bg-gamsa{background-image:url(${IMG_GAMSA})!important}.bg-dance1{background-image:url(${IMG_DANCE1})!important}.bg-dance2{background-image:url(${IMG_DANCE2})!important}`;document.head.appendChild(s)})();
 /* ============================== Utilities ============================== */
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -277,7 +279,7 @@ function vHome(){
   const slides=[
     {t:'t1',bg:'bg-render',alt:'Karbi-style ceremonial gateway',icon:'userplus',h:`Registration open for the ${YEAR} session`,p:`Free training in ${courses.length} courses across ${sectors.length} sectors for the youth of Karbi Anglong and West Karbi Anglong.`,a:['#student','Apply now']},
     {t:'t2',bg:'bg-museum',alt:'Nothengpi Karbi Heritage Museum lit at night',icon:'book',h:'Stipend for ST (Hills) students',p:'The council gives stipends to ST (Hills) students pursuing professional courses. Applications are made on the council’s stipend portal.',a:['https://artpskaac.in/stipend/','Visit the stipend portal',1]},
-    {t:'t3',bg:'bg-people',alt:'Young people of Karbi Anglong in traditional attire',icon:'sparkle',h:'Karbi Youth Festival',p:'The council’s annual festival celebrating Karbi music, dance and culture, with young people from across the region.',a:['https://karbiyouthfestival.com/','Visit the festival website',1]},
+    {t:'t3',bg:'bg-dance2',alt:'Young men in traditional Karbi dress performing a folk dance',icon:'sparkle',h:'Karbi Youth Festival',p:'The council’s annual festival celebrating Karbi music, dance and culture, with young people from across the region.',a:['https://karbiyouthfestival.com/','Visit the festival website',1]},
     {t:'t4',icon:'trainer',h:openRec?openRec.title:'Trainers and subject experts wanted',p:openRec?`${openRec.engagement||'Apply online'}. Last date ${fmtD(openRec.lastDate)}.`:'Watch this space for the department’s next trainer recruitment.',a:['#recruitment',openRec?'See the advertisement and apply':'See recruitment']}
   ];
   const fc0=extCourses().find(c=>c.featured), fj0=jobList().find(j=>j.featured);
@@ -304,6 +306,8 @@ function vHome(){
       .map(([h,i,t,d,c])=>`<a class="tile" href="${h}" style="--c:${c}"><span class="ti">${ic(i)}</span><b>${t}</b><span class="d">${d}</span></a>`).join('')}
   </div>
 
+  <section class="lt-sec"><img class="welcome-banner" src="${IMG_WELCOME}" width="1600" height="881" alt="${WELCOME_ALT}"></section>
+
   <section class="lt-sec band band-soft"><div class="gamsa-deco r bg-gamsa" aria-hidden="true"></div>
     <div class="sh"><h2>Explore courses by sector</h2><a href="#courses">View all ${courses.length} courses ${ic('arrow')}</a></div>
     <div class="sectors">${sectors.map((s,i)=>`<button class="sect" style="--c:${SECT_COL[i%SECT_COL.length]}" onclick="courseSector='${s.id}';go('courses')"><span class="ti">${ic(SECT_ICON[s.id]||'book')}</span><b>${esc(s.name)}</b><small>${courses.filter(c=>c.sectorId===s.id).length} courses</small></button>`).join('')}</div>
@@ -311,7 +315,8 @@ function vHome(){
 
   <section class="lt-sec"><div class="culture"><div class="culture-img bg-people" role="img" aria-label="Young people of Karbi Anglong in traditional Karbi attire"></div>
     <div class="culture-txt"><div><h2>Skills rooted in Karbi heritage</h2><p>From traditional handloom weaving and organic ginger farming to guiding visitors through the hills, our courses build on the craft, culture and landscape of Karbi Anglong, alongside modern trades in IT, healthcare and construction.</p></div>
-    <div class="row"><button class="btn primary" onclick="courseSector='APP';go('courses')">Handloom courses</button><button class="btn" onclick="courseSector='TOU';go('courses')">Tourism courses</button></div></div></div></section>
+    <div class="row"><button class="btn primary" onclick="courseSector='APP';go('courses')">Handloom courses</button><button class="btn" onclick="courseSector='TOU';go('courses')">Tourism courses</button></div></div></div>
+    <div class="heritage-gallery"><figure class="hg bg-dance1" role="img" aria-label="Young men in traditional Karbi dress in a dance procession"><figcaption>Traditional Karbi dance procession</figcaption></figure><figure class="hg bg-dance2" role="img" aria-label="Young men in traditional Karbi dress performing a folk dance"><figcaption>Karbi folk dance performance</figcaption></figure></div></section>
 
   <section class="lt-sec"><div class="gamsa-deco l bg-gamsa" aria-hidden="true"></div><div class="g2c">
     <div><div class="photo-card bg-museum" role="img" aria-label="Nothengpi Karbi Heritage Museum lit at night"><span class="cap">Nothengpi Karbi Heritage Museum</span></div><h2>Karbi Anglong at a glance</h2>
@@ -494,7 +499,7 @@ function vAbout(){
   const st=settings(); const paras=(st.aboutText||'').split(/\n+/).filter(Boolean);
   const order=['jts','training','supervising','monitoring','dealing','centre'];
   const people=list('users').filter(u=>u.active&&u.role!=='admin').sort((a,b)=>order.indexOf(a.role)-order.indexOf(b.role));
-  return `${pageHead('About us')}<div class="culture-img bg-people" role="img" aria-label="Young people of Karbi Anglong in traditional Karbi attire" style="margin-bottom:26px"></div>
+  return `${pageHead('About us')}<img class="welcome-banner" src="${IMG_WELCOME}" width="1600" height="881" alt="${WELCOME_ALT}" style="margin-bottom:26px">
   <div class="two"><section class="about-txt">${paras.map(p=>`<p>${esc(p)}</p>`).join('')}
     <h3 style="margin-top:22px">What we do</h3>
     <ul style="padding-left:20px;line-height:1.8"><li>Free short-term skill training aligned to national standards (NSQF)</li><li>Aptitude tests, assessment and certification</li><li>On-the-job training and placement linkage with employers</li><li>Support for self-employment and small enterprises</li><li>Empanelment of qualified trainers for our centres</li></ul></section>
