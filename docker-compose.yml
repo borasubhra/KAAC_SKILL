@@ -1,5 +1,27 @@
-# Local run:   docker compose up -d --build      then open http://localhost:8080
+# Local run:   docker compose up -d --build      then open http://localhost:8080 (portal) and http://localhost:8025 (test mailbox)
 # Production:  copy .env.example to .env, fill it in, then run the same command (see README).
+
+# Settings shared by the portal and the mail worker.
+x-app-env: &app-env
+  APP_ENV: ${APP_ENV:-development}
+  APP_SECRET: ${APP_SECRET:-dev-only-secret-change-me-0123456789abcdef}
+  DB_HOST: db
+  DB_PORT: "5432"
+  DB_NAME: ${DB_NAME:-kaac}
+  DB_USER: ${DB_USER:-kaac}
+  DB_PASS: ${DB_PASS:-kaac-local-dev-password}
+  ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+  DEMO_USERS: ${DEMO_USERS:-true}
+  TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+  # Email. By default everything goes to the Mailpit test mailbox below; set a real mail server in .env.
+  SMTP_HOST: ${SMTP_HOST:-mailpit}
+  SMTP_PORT: ${SMTP_PORT:-1025}
+  SMTP_SECURE: ${SMTP_SECURE:-none}
+  SMTP_USER: ${SMTP_USER:-}
+  SMTP_PASS: ${SMTP_PASS:-}
+  SMTP_FROM: ${SMTP_FROM:-no-reply@sde-kaac.local}
+  SMTP_FROM_NAME: ${SMTP_FROM_NAME:-SDE Dept, KAAC}
+
 services:
   db:
     image: postgres:16-alpine
@@ -21,25 +43,36 @@ services:
 
   app:
     build: .
+    image: kaac-portal:latest
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
     ports:
       - "${APP_PORT:-8080}:80"
-    environment:
-      APP_ENV: ${APP_ENV:-development}
-      APP_SECRET: ${APP_SECRET:-dev-only-secret-change-me-0123456789abcdef}
-      DB_HOST: db
-      DB_PORT: "5432"
-      DB_NAME: ${DB_NAME:-kaac}
-      DB_USER: ${DB_USER:-kaac}
-      DB_PASS: ${DB_PASS:-kaac-local-dev-password}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
-      DEMO_USERS: ${DEMO_USERS:-true}
-      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+    environment: *app-env
     volumes:
       - uploads:/var/www/storage
+
+  # Sends queued emails (application acknowledgements, selection emails, password resets).
+  worker:
+    image: kaac-portal:latest
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    entrypoint: ["php", "/var/www/app/cli/worker.php"]
+    environment: *app-env
+    healthcheck:
+      disable: true
+
+  # Test mailbox for development: every email the portal sends appears at http://localhost:8025.
+  # Not needed in production once SMTP_HOST points to a real mail server.
+  mailpit:
+    image: axllent/mailpit:v1.21
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${MAILPIT_PORT:-8025}:8025"
 
 volumes:
   pgdata:

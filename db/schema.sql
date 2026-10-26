@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS centres (
 CREATE TABLE IF NOT EXISTS users (
   id          text PRIMARY KEY CHECK (id ~ '^[a-z0-9._-]+$'),
   name        text NOT NULL,
-  role        text NOT NULL CHECK (role IN ('admin','dealing','supervising','monitoring','training','jts','centre')),
+  role        text NOT NULL,
   centre_id   text REFERENCES centres(id),
   active      boolean NOT NULL DEFAULT true,
   pw_hash     text NOT NULL,
@@ -120,8 +120,7 @@ CREATE TABLE IF NOT EXISTS students (
   updated_at    timestamptz NOT NULL DEFAULT now()
 );
 -- Only one open application per Aadhaar number.
-CREATE UNIQUE INDEX IF NOT EXISTS students_one_active_per_aadhaar ON students(aadhaar_hmac)
-  WHERE status NOT IN ('rejected','notselected','certified','failed');
+-- (the 'one open application per Aadhaar' index is defined in the CR changes section below)
 CREATE INDEX IF NOT EXISTS students_status ON students(status);
 CREATE INDEX IF NOT EXISTS students_centre ON students(centre_id);
 CREATE INDEX IF NOT EXISTS students_batch ON students(batch_id);
@@ -240,3 +239,54 @@ CREATE TABLE IF NOT EXISTS audit_log (
   detail      jsonb NOT NULL DEFAULT '{}',
   ip          text NOT NULL DEFAULT ''
 );
+
+/* ---------- Change requirements CR-01 to CR-10 (26 Oct 2026) ----------
+   Written so they also upgrade a database created by the earlier version. */
+
+-- CR-01: student accounts. An account is not an application; students apply separately.
+CREATE TABLE IF NOT EXISTS applicants (
+  id          bigserial PRIMARY KEY,
+  name        text NOT NULL,
+  email       text NOT NULL,
+  mobile      text NOT NULL,
+  pw_hash     text NOT NULL,
+  active      boolean NOT NULL DEFAULT true,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  last_login  timestamptz
+);
+CREATE UNIQUE INDEX IF NOT EXISTS applicants_email ON applicants(lower(email));
+
+CREATE TABLE IF NOT EXISTS password_resets (
+  token_hash   text PRIMARY KEY,
+  applicant_id bigint NOT NULL REFERENCES applicants(id) ON DELETE CASCADE,
+  expires_at   timestamptz NOT NULL,
+  used_at      timestamptz
+);
+
+ALTER TABLE students ADD COLUMN IF NOT EXISTS applicant_id bigint REFERENCES applicants(id);
+ALTER TABLE students ADD COLUMN IF NOT EXISTS approved_at timestamptz;
+CREATE INDEX IF NOT EXISTS students_applicant ON students(applicant_id);
+
+-- Only one open application per Aadhaar number, and per student account.
+DROP INDEX IF EXISTS students_one_active_per_aadhaar;
+CREATE UNIQUE INDEX IF NOT EXISTS students_one_open_per_aadhaar ON students(aadhaar_hmac)
+  WHERE status NOT IN ('rejected','notshortlisted','notapproved','notselected','certified','failed');
+CREATE UNIQUE INDEX IF NOT EXISTS students_one_open_per_applicant ON students(applicant_id)
+  WHERE applicant_id IS NOT NULL AND status NOT IN ('rejected','notshortlisted','notapproved','notselected','certified','failed');
+
+-- CR-04 / CR-10: the Supervising Officer and Monitoring Officer are one person and one account.
+UPDATE users SET role = 'supervising' WHERE role = 'monitoring';
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin','dealing','supervising','jts','centre','training'));
+
+-- CR-09: centre master details. `capacity` is the most trainees one batch at the centre can hold.
+ALTER TABLE centres ADD COLUMN IF NOT EXISTS centre_type text NOT NULL DEFAULT 'Government institute';
+ALTER TABLE centres ADD COLUMN IF NOT EXISTS hod text NOT NULL DEFAULT '';
+ALTER TABLE centres ADD COLUMN IF NOT EXISTS nearby_town text NOT NULL DEFAULT '';
+ALTER TABLE centres ADD COLUMN IF NOT EXISTS facilities text NOT NULL DEFAULT '';
+
+-- CR-02 / CR-06: emails are queued here and sent by the mail worker (app/cli/worker.php).
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS attempts int NOT NULL DEFAULT 0;
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS sent_at timestamptz;
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS last_error text;
+CREATE INDEX IF NOT EXISTS notifications_queue ON notifications(id) WHERE status = 'Queued';

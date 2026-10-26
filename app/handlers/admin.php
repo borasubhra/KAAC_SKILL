@@ -39,11 +39,21 @@ function h_save_master(array $in): array {
   } else {
     $sectors = array_values(array_filter((array)($d['sectors'] ?? []), fn($s) => is_string($s) && val('SELECT 1 FROM sectors WHERE id = :id', [':id' => $s])));
     if (!in_array(str_in($d, 'district'), ['Karbi Anglong', 'West Karbi Anglong'], true)) fail('Choose a district.');
-    q('INSERT INTO centres(id, name, address, district, sectors, capacity, phone, active) VALUES (:id,:n,:a,:d,:s,:c,:p,:act)
+    // CR-09: type, Head of Department (Government institutes), nearby town, facilities, and batch capacity.
+    $type = str_in($d, 'type');
+    if (!in_array($type, ['Government institute', 'Private'], true)) fail('Choose whether the centre is a Government institute or Private.');
+    $hod = $type === 'Government institute' ? str_in($d, 'hod', 150) : '';
+    if ($type === 'Government institute' && $hod === '') fail('Enter the Head of Department of the Government institute.');
+    $capacity = (int)($d['capacity'] ?? 0);
+    if ($capacity < 1 || $capacity > 500) fail('Enter how many trainees one batch at this centre can hold (1–500).');
+    q('INSERT INTO centres(id, name, address, district, sectors, capacity, phone, active, centre_type, hod, nearby_town, facilities)
+       VALUES (:id,:n,:a,:d,:s,:c,:p,:act,:t,:h,:town,:f)
        ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, address = EXCLUDED.address, district = EXCLUDED.district, sectors = EXCLUDED.sectors,
-         capacity = EXCLUDED.capacity, phone = EXCLUDED.phone, active = EXCLUDED.active',
+         capacity = EXCLUDED.capacity, phone = EXCLUDED.phone, active = EXCLUDED.active, centre_type = EXCLUDED.centre_type, hod = EXCLUDED.hod,
+         nearby_town = EXCLUDED.nearby_town, facilities = EXCLUDED.facilities',
       [':id' => $id, ':n' => $name, ':a' => str_in($d, 'address', 300), ':d' => str_in($d, 'district'), ':s' => to_pg_arr($sectors),
-        ':c' => max(0, (int)($d['capacity'] ?? 0)), ':p' => str_in($d, 'phone', 30), ':act' => !empty($d['active']) ? 'true' : 'false']);
+        ':c' => $capacity, ':p' => str_in($d, 'phone', 30), ':act' => !empty($d['active']) ? 'true' : 'false', ':t' => $type, ':h' => $hod,
+        ':town' => str_in($d, 'nearbyTown', 120), ':f' => str_in($d, 'facilities', 1000)]);
   }
   audit("master:save:$coll", $id);
   return ['ok' => true];
@@ -117,12 +127,13 @@ function h_change_password(array $in): array {
 }
 
 const SETTINGS_FIELDS = ['deptName', 'council', 'address', 'jtsName', 'jtsDesignation', 'phone', 'email', 'officeHours', 'aboutText',
-  'defaultVenue', 'defaultTime', 'smsSender', 'smsGateway', 'emailFrom', 'notices'];
+  'smsSender', 'smsGateway', 'notices', 'ackEmailText', 'selectionEmailText', 'maxBatchSize'];
 
 function h_save_settings(array $in): array {
   if ((require_staff())['role'] !== 'admin') fail('Only the administrator can change settings.', 403);
   $s = settings_all();
   foreach (SETTINGS_FIELDS as $k) if (array_key_exists($k, $in)) $s[$k] = str_in($in, $k, 5000);
+  if (isset($s['maxBatchSize']) && ((int)$s['maxBatchSize'] < 1 || (int)$s['maxBatchSize'] > 200)) fail('Enter a maximum batch size between 1 and 200.');
   $logo = $in['logo'] ?? null;
   if (!empty($in['logoRemove'])) $s['logo'] = '';
   elseif (is_string($logo) && $logo !== '') {

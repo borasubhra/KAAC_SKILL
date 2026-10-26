@@ -6,17 +6,22 @@ date_default_timezone_set('Asia/Kolkata');
 mb_internal_encoding('UTF-8');
 
 const ROLES = [
-  'admin' => 'Administrator', 'dealing' => 'Dealing Officer', 'supervising' => 'Supervising Officer',
-  'monitoring' => 'Monitoring Officer', 'training' => 'Training Manager', 'jts' => 'Joint Secretary',
-  'centre' => 'Centre Manager',
+  'admin' => 'System Administrator', 'dealing' => 'Dealing Assistant', 'supervising' => 'Supervising & Monitoring Officer',
+  'jts' => 'Joint Secretary', 'centre' => 'Centre Manager', 'training' => 'Training Manager',
 ];
 const QUALS = ['Class 5', 'Class 8', 'Class 10', 'Class 12', 'ITI', 'Diploma', 'Graduate', 'Post Graduate'];
+// Application stages: Dealing Assistant -> S&M Officer -> Joint Secretary -> Centre Manager -> Training Manager.
 const STATUS_LABELS = [
-  'submitted' => 'Submitted', 'returned' => 'Returned for correction', 'verified' => 'Documents verified',
-  'admit' => 'Admit card issued', 'selected' => 'Selected', 'notselected' => 'Not selected',
+  'submitted' => 'Submitted', 'returned' => 'Returned for correction', 'rejected' => 'Rejected',
+  'verified' => 'Documents verified', 'shortlisted' => 'Shortlisted', 'notshortlisted' => 'Not shortlisted',
+  'approved' => 'Selected', 'notapproved' => 'Not selected', 'allocated' => 'Centre allotted',
   'batched' => 'Batch allotted', 'training' => 'In training', 'passed' => 'Passed assessment',
-  'failed' => 'Not passed', 'certified' => 'Certified', 'rejected' => 'Rejected',
+  'failed' => 'Not passed', 'certified' => 'Certified',
+  // Earlier version only (aptitude test step), kept so old records still show a label.
+  'admit' => 'Admit card issued', 'selected' => 'Selected', 'notselected' => 'Not selected',
 ];
+/** An application in one of these states is finished; the person may apply again. */
+const CLOSED_STATUSES = ['rejected', 'notshortlisted', 'notapproved', 'notselected', 'certified', 'failed'];
 const TSTATUS_LABELS = [
   'submitted' => 'Submitted', 'returned' => 'Returned for correction', 'verified' => 'Documents verified',
   'empanelled' => 'Empanelled', 'rejected' => 'Rejected', 'inactive' => 'Inactive',
@@ -44,6 +49,7 @@ require __DIR__ . '/auth.php';
 require __DIR__ . '/files.php';
 require __DIR__ . '/mappers.php';
 require __DIR__ . '/notify.php';
+require __DIR__ . '/mail.php';
 
 /* ---------- Configuration ---------- */
 

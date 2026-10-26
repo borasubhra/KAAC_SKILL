@@ -29,14 +29,23 @@ const validAadhaar = a => /^[2-9]\d{11}$/.test(a) && verhoeffOk(a);
 function testAadhaar(){let n=String(2+Math.floor(Math.random()*8));for(let i=0;i<10;i++)n+=Math.floor(Math.random()*10);let c=0;[...n].reverse().forEach((d,i)=>{c=VD[c][VP[(i+1)%8][+d]]});return n+VINV[c]}
 
 /* ============================== Reference data ============================== */
-const ROLES = {admin:'Administrator',dealing:'Dealing Officer',supervising:'Supervising Officer',monitoring:'Monitoring Officer',training:'Training Manager',jts:'Joint Secretary',centre:'Centre Manager'};
+const ROLES = {admin:'System Administrator',dealing:'Dealing Assistant',supervising:'Supervising & Monitoring Officer',jts:'Joint Secretary',centre:'Centre Manager',training:'Training Manager'};
 const QUALS = ['Class 5','Class 8','Class 10','Class 12','ITI','Diploma','Graduate','Post Graduate'];
+/* Application stages: Dealing Assistant → S&M Officer → Joint Secretary → Centre Manager → Training Manager */
 const STATUS = {
-  submitted:['Submitted','info'], returned:['Returned for correction','warn'], verified:['Documents verified','info'],
-  admit:['Admit card issued','info'], selected:['Selected','ok'], notselected:['Not selected','bad'],
+  submitted:['Submitted','info'], returned:['Returned for correction','warn'], rejected:['Rejected','bad'],
+  verified:['Documents verified','info'], shortlisted:['Shortlisted','info'], notshortlisted:['Not shortlisted','bad'],
+  approved:['Selected','ok'], notapproved:['Not selected','bad'], allocated:['Centre allotted','ok'],
   batched:['Batch allotted','ok'], training:['In training','ok'], passed:['Passed assessment','ok'],
-  failed:['Not passed','bad'], certified:['Certified','ok'], rejected:['Rejected','bad']
+  failed:['Not passed','bad'], certified:['Certified','ok'],
+  admit:['Admit card issued','info'], selected:['Selected','ok'], notselected:['Not selected','bad']  // earlier version only
 };
+const CLOSED = ['rejected','notshortlisted','notapproved','notselected','certified','failed'];
+/* Where each stage's applications are waiting, shown to officers and applicants. */
+const STAGE_NOTE = {submitted:'With the Dealing Assistant for document verification',returned:'Waiting for you to re-upload documents',verified:'With the Supervising & Monitoring Officer for shortlisting',
+  shortlisted:'With the Joint Secretary for approval',approved:'Selected. The Centre Manager will allot your training centre',allocated:'Centre allotted. Waiting for a batch',
+  batched:'In a batch. Training starts on the batch start date',training:'Training in progress',passed:'Passed. Certificate to be issued'};
+const SELECTED_ON = ['approved','allocated','batched','training','passed','failed','certified'];
 const statusTag = s => `<span class="tag ${STATUS[s]?.[1]||''}">${esc(STATUS[s]?.[0]||s)}</span>`;
 const DOC_TYPES = [
   {key:'photo',label:'Passport-size photograph',req:true,img:true},
@@ -51,8 +60,7 @@ const DOC_TYPES = [
 /* Shown on the login page only when the server runs in development mode with demo accounts. */
 const DEMO_USERS = [
   ['admin','Admin@123','admin',''],['dealing','Deal@123','dealing',''],['supervising','Super@123','supervising',''],
-  ['monitoring','Monitor@123','monitoring',''],['training','Train@123','training',''],['jtsecy','Jts@123','jts',''],
-  ['centre1','Centre@123','centre','KAAC-C-001'],['centre2','Centre@123','centre','KAAC-C-002']
+  ['jtsecy','Jts@123','jts',''],['centre','Centre@123','centre',''],['training','Train@123','training','']
 ];
 /* Used until the settings arrive from the server. */
 const DEFAULT_SETTINGS = {deptName:'Skill Development & Entrepreneurship Department',council:'Karbi Anglong Autonomous Council',address:'Diphu, Karbi Anglong, Assam – 782460',jtsDesignation:'Joint Secretary'};
@@ -80,7 +88,7 @@ async function api(route,{method='GET',data,form,query}={}){
   catch(e){throw new ApiError('Cannot reach the server. Check your connection and try again.',0)}
   let body=null; try{body=await res.json()}catch(e){}
   if(!res.ok){
-    if(res.status===401&&ME&&route!=='login') sessionEnded();
+    if(res.status===401&&(ME||STU)&&!['login','student_login','sign_ojt','change_password'].includes(route)) sessionEnded();
     throw new ApiError(body?.error||`The server could not complete the request (${res.status}).`,res.status);
   }
   return body;
@@ -91,24 +99,28 @@ function applyData(d){
   if(d.ext){S.extcourses=byId(d.ext.courses);S.jobs=byId(d.ext.jobs)}
 }
 async function loadPublic(){const d=await api('public');DEMO=!!d.demo;applyData(d)}
-async function loadStaff(){const d=await api('staff_data');ME=d.me;applyData(d)}
+async function loadStaff(){const d=await api('staff_data');ME=d.me;MAXBATCH=d.maxBatchSize||45;applyData(d)}
+/* The logged-in student's account and their own applications (CR-01). */
+let STU=null;
+async function loadStudent(){const d=await api('student_me');STU=d.me;STAFF_COLLS.forEach(c=>S[c]={});if(STU)applyData(d)}
 /** Reloads what this visitor can see, then redraws (unless someone is typing). */
 async function refresh(){
-  try{ME?await loadStaff():await loadPublic()}catch(e){if(e.status!==401)toast(e.message)}
+  try{ME?await loadStaff():STU?await loadStudent():await loadPublic()}catch(e){if(e.status!==401)toast(e.message)}
   scheduleRefresh();
 }
 /** Sends a staff or applicant action to the server. Returns the response, or null after showing the error. */
 async function act(route,data,okMsg,form){
-  try{const r=await api(route,{method:'POST',data,form});if(okMsg)toast(okMsg);if(ME)await refresh();return r||{}}
+  try{const r=await api(route,{method:'POST',data,form});if(okMsg)toast(okMsg);if(ME||STU)await refresh();return r||{}}
   catch(e){toast(e.message);return null}
 }
 function sessionEnded(){
-  ME=null; STAFF_COLLS.forEach(c=>S[c]={});
+  const wasStudent=!!STU; ME=null; STU=null; STAFF_COLLS.forEach(c=>S[c]={});
   closeModal(); toast('Your session has ended. Please log in again.');
-  loadPublic().catch(()=>{}).finally(()=>{route==='staff'?go('login'):render()});
+  loadPublic().catch(()=>{}).finally(()=>{route==='staff'?go('login'):['apply'].includes(route)||wasStudent?go('student'):render()});
 }
-setInterval(()=>{if(ME&&!document.hidden)refresh()},30000);
-document.addEventListener('visibilitychange',()=>{if(ME&&!document.hidden)refresh()});
+let MAXBATCH=45;
+setInterval(()=>{if((ME||STU)&&!document.hidden)refresh()},30000);
+document.addEventListener('visibilitychange',()=>{if((ME||STU)&&!document.hidden)refresh()});
 const docUrl = (id,download) => 'api.php?r=doc&id='+encodeURIComponent(id)+(download?'&download=1':'');
 
 /* Refresh on data change, but never while someone is typing */
@@ -122,9 +134,13 @@ document.addEventListener('focusout',()=>{if(pendingRefresh && !FORM_ROUTES.incl
 
 /* ============================== Session & routing ============================== */
 let route='home', staffView='dash', ME=null;
-const FORM_ROUTES=['register','trainer'];
-function go(r){location.hash=r}
-function readHash(){const h=(location.hash||'#home').slice(1);const [r,arg]=h.split('/');route=['home','about','courses','learn','jobs','register','trainer','track','verify','notices','contact','login','staff'].includes(r)?r:'home';
+const FORM_ROUTES=['apply','trainer'];
+let routeArg='';
+/* Navigates to a route. Setting the hash it already has fires no hashchange, so redraw directly in that case. */
+function go(r){if(location.hash==='#'+r)readHash();else location.hash=r}
+function readHash(){const h=(location.hash||'#home').slice(1);const [r,arg]=h.split('/');route=['home','about','courses','learn','jobs','student','apply','reset','trainer','track','verify','notices','contact','login','staff'].includes(r)?r:'home';
+  routeArg=decodeURIComponent(arg||'');
+  if(route==='apply'&&!STU){applyFor=routeArg;route='student'}
   if(route==='verify'&&arg&&decodeURIComponent(arg)!==verifyQ){verifyQ=decodeURIComponent(arg);runVerify()}
   if(route!=='track'){trackFound=null;trackPrefill=''}  // don't leave someone's details on a shared computer
   if(route==='staff'&&!ME)route='login';render();window.scrollTo(0,0)}
@@ -142,10 +158,12 @@ function render(){
   $$('#pubnav a[aria-current]').forEach(a=>a.setAttribute('aria-current','page'));
   $('#staffLink').textContent = ME ? 'Staff area' : 'Staff login';
   $('#staffLink').setAttribute('href', ME ? '#staff' : '#login');
+  $('#studentLink').textContent = STU ? 'My applications' : 'Apply online';
+  $('#studentLink').toggleAttribute('aria-current', ['student','apply','reset'].includes(route));
   const m=$('#main');
   if(!LOADED){m.innerHTML=LOAD_ERROR?`<div class="panel" style="margin:40px auto;max-width:560px"><h2>The portal is not available</h2><p>${esc(LOAD_ERROR)}</p><button class="btn primary" onclick="init()">Try again</button></div>`:'<p class="muted" style="padding:60px 0;text-align:center">Loading…</p>';return}
-  m.innerHTML = ({learn:vLearn,jobs:vJobs,about:vAbout,notices:vNotices,contact:vContact,trainer:vTrainerReg,home:vHome,courses:vCourses,register:vRegister,track:vTrack,verify:vVerify,login:vLogin,staff:vStaff}[route]||vHome)();
-  if(route==='register') wireRegister();
+  m.innerHTML = ({learn:vLearn,jobs:vJobs,about:vAbout,notices:vNotices,contact:vContact,trainer:vTrainerReg,home:vHome,courses:vCourses,student:vStudent,apply:vApply,reset:vReset,track:vTrack,verify:vVerify,login:vLogin,staff:vStaff}[route]||vHome)();
+  if(route==='apply') wireApply();
   if(route==='trainer') wireTrainer();
 }
 
@@ -184,7 +202,7 @@ function renderChrome(){
     <div><div class="ft-brand"><span class="logo-slot">${logo}</span><b class="h" style="margin:0">${esc(st.deptName)}</b></div>
       <p>${esc(st.council)}<br>${esc(st.address)}</p><p>${st.phone?'Helpline: '+esc(st.phone)+'<br>':''}${st.email?'Email: '+esc(st.email)+'<br>':''}${esc(st.officeHours||'')}</p></div>
     <div><b class="h">Quick links</b><a href="#home">Home</a><a href="#about">About us</a><a href="#courses">Courses</a><a href="#learn">Online learning</a><a href="#jobs">Jobs</a><a href="#notices">Notices</a><a href="#contact">Contact us</a></div>
-    <div><b class="h">Services</b><a href="#register">Student registration</a><a href="#trainer">Trainer registration</a><a href="#track">Track status</a><a href="#verify">Verify certificate</a><a href="#login">Staff login</a></div>
+    <div><b class="h">Services</b><a href="#student">Apply online (students)</a><a href="#trainer">Trainer registration</a><a href="#track">Track status</a><a href="#verify">Verify certificate</a><a href="#login">Staff login</a></div>
     <div><b class="h">Important links</b>${ext('https://karbianglong.co.in/','KAAC official website')}${ext('https://artpskaac.in/stipend/','Stipend for ST(H) students')}${ext('https://karbiyouthfestival.com/','Karbi Youth Festival')}${ext('https://assam.gov.in/','Assam State Portal')}${ext('https://www.skillindiadigital.gov.in/','Skill India Digital Hub')}${ext('https://www.india.gov.in/','National Portal of India')}</div>
   </div>
   <div class="ft-bottom"><span>© ${YEAR} ${esc(st.deptName)}, ${esc(st.council)} · Last updated ${fmtD(last||nowISO())}${DEMO?' · <span id="modeNote">Development mode: demo accounts are enabled.</span>':''}</span>
@@ -246,7 +264,7 @@ function vHome(){
   const st=settings(), courses=list('courses').filter(c=>c.active), sectors=list('sectors'), centres=list('centres').filter(c=>c.active);
   const ns=latestNotices(4); const top=ns[0]; const logo=st.logo?`<img src="${esc(st.logo)}" alt="">`:'KAAC';
   const slides=[
-    {t:'t1',bg:'bg-render',alt:'Karbi-style ceremonial gateway',icon:'userplus',h:`Registration open for the ${YEAR} session`,p:`Free training in ${courses.length} courses across ${sectors.length} sectors for the youth of Karbi Anglong and West Karbi Anglong.`,a:['#register','Register now']},
+    {t:'t1',bg:'bg-render',alt:'Karbi-style ceremonial gateway',icon:'userplus',h:`Registration open for the ${YEAR} session`,p:`Free training in ${courses.length} courses across ${sectors.length} sectors for the youth of Karbi Anglong and West Karbi Anglong.`,a:['#student','Apply now']},
     {t:'t2',bg:'bg-museum',alt:'Nothengpi Karbi Heritage Museum lit at night',icon:'book',h:'Stipend for ST (Hills) students',p:'The council gives stipends to ST (Hills) students pursuing professional courses. Applications are made on the council’s stipend portal.',a:['https://artpskaac.in/stipend/','Visit the stipend portal',1]},
     {t:'t3',bg:'bg-people',alt:'Young people of Karbi Anglong in traditional attire',icon:'sparkle',h:'Karbi Youth Festival',p:'The council’s annual festival celebrating Karbi music, dance and culture, with young people from across the region.',a:['https://karbiyouthfestival.com/','Visit the festival website',1]},
     {t:'t4',icon:'trainer',h:'Trainers and subject experts wanted',p:'Register with your qualifications and experience to join the department’s trainer panel and teach at our skill centres.',a:['#trainer','Register as a trainer']}
@@ -255,7 +273,7 @@ function vHome(){
   if(fj0) slides.splice(1,0,{t:'t2',icon:'building',h:`Now hiring: ${fj0.title}`,p:`${fj0.employer}, ${fj0.location} · ${fj0.pay}. See this and more openings on our Jobs page.`,a:['#jobs','See job openings']});
   if(fc0) slides.splice(1,0,{t:'t1',icon:'book',h:`Learn online: ${fc0.title}`,p:`${fc0.by}. ${fc0.duration}. ${fc0.cost}.`,a:[fc0.url,'Go to course',1]});
   slideIdx%=slides.length;
-  const steps=[['Register online','Aadhaar, details and documents'],['Verification','Documents checked by the department'],['Admit card','Download it and take the aptitude test'],['Batch and centre','Selected candidates join a batch'],['Certificate','Issued after you pass the assessment'],['On-the-job training','Recommendation letter for employers']];
+  const steps=[['Apply online','Create an account, choose a trade, upload documents'],['Verification','Documents checked by the Dealing Assistant'],['Shortlist and approval','Shortlisted, then approved by the Joint Secretary'],['Centre and batch','Selected candidates get a centre and a batch'],['Certificate','Issued after you pass the assessment'],['On-the-job training','Recommendation letter for employers']];
   return `
   <section class="hero2 herophoto bg-gate">
     <div class="hero2-in">
@@ -271,7 +289,7 @@ function vHome(){
     ${HILLS}
   </section>
   <div class="tiles">
-    ${[['#register','userplus','Register for a course','Apply online with Aadhaar','#0b6e4f'],['#trainer','trainer','Become a trainer','Join the trainer panel','#2563eb'],['#track','search','Track status','Admit card and progress','#d97706'],['#verify','badge','Verify certificate','For employers','#be185d']]
+    ${[['#student','userplus','Apply for a course','Create an account and apply online','#0b6e4f'],['#trainer','trainer','Become a trainer','Join the trainer panel','#2563eb'],['#track','search','Track status','Follow your application','#d97706'],['#verify','badge','Verify certificate','For employers','#be185d']]
       .map(([h,i,t,d,c])=>`<a class="tile" href="${h}" style="--c:${c}"><span class="ti">${ic(i)}</span><b>${t}</b><span class="d">${d}</span></a>`).join('')}
   </div>
 
@@ -326,7 +344,7 @@ function vHome(){
   </section>
 
   <section class="lt-sec"><div class="ctaband ph bg-render"><div><h2>Ready to learn a new skill?</h2><p>Keep your Aadhaar number and scanned documents ready, then apply online.</p></div>
-    <div class="row"><a class="btn primary lg" href="#register">Register now</a><a class="btn lg" href="#courses">Browse courses</a></div></div></section>`;
+    <div class="row"><a class="btn primary lg" href="#student">Apply now</a><a class="btn lg" href="#courses">Browse courses</a></div></div></section>`;
 }
 
 /* ---------- Online learning & jobs ---------- */
@@ -496,8 +514,8 @@ function vContact(){
   <div class="two"><section class="panel"><h3>${esc(st.deptName)}</h3><p>${esc(st.council)}<br>${esc(st.address)}</p>
     <dl class="kv"><dt>Phone</dt><dd>${esc(st.phone||'To be updated')}</dd><dt>Email</dt><dd>${st.email?`<a href="mailto:${esc(st.email)}">${esc(st.email)}</a>`:'To be updated'}</dd><dt>Office hours</dt><dd>${esc(st.officeHours||'—')}</dd></dl></section>
   <section class="panel"><h3>Questions about an application?</h3><p class="small">Quote your application ID or trainer registration ID when you call or write. You can check most updates yourself on <a href="#track">Track status</a>.</p></section></div>
-  <section class="sec"><div class="sec-h"><h2>Training centres</h2></div><div class="tw"><table><thead><tr><th>Centre ID</th><th>Centre</th><th>District</th><th>Sectors</th><th>Phone</th></tr></thead><tbody>
-  ${list('centres').filter(c=>c.active).sort((a,b)=>a.id.localeCompare(b.id)).map(c=>`<tr><td class="id">${esc(c.id)}</td><td>${esc(c.name)}<div class="small muted">${esc(c.address)}</div></td><td>${esc(c.district)}</td><td class="small">${c.sectors.map(sectorName).join(', ')}</td><td class="small">${esc(c.phone||'—')}</td></tr>`).join('')}
+  <section class="sec"><div class="sec-h"><h2>Training centres</h2></div><div class="tw"><table><thead><tr><th>Centre ID</th><th>Centre</th><th>Type</th><th>District</th><th>Sectors</th><th>Facilities</th><th>Phone</th></tr></thead><tbody>
+  ${list('centres').filter(c=>c.active).sort((a,b)=>a.id.localeCompare(b.id)).map(c=>`<tr><td class="id">${esc(c.id)}</td><td>${esc(c.name)}<div class="small muted">${esc(c.address)}${c.nearbyTown?' · near '+esc(c.nearbyTown):''}</div></td><td class="small">${esc(c.type)}</td><td>${esc(c.district)}</td><td class="small">${c.sectors.map(sectorName).join(', ')}</td><td class="small">${esc(c.facilities||'—')}</td><td class="small">${esc(c.phone||'—')}</td></tr>`).join('')}
   </tbody></table></div></section>`;
 }
 
@@ -555,30 +573,118 @@ function vCourses(){
       ${arr.map(c=>`<tr><td class="id">${esc(c.id)}</td><td>${esc(c.name)}</td><td>Level ${esc(c.nsqf)}</td><td>${c.hours} hrs<div class="small muted">≈ ${Math.max(1,Math.round(c.hours/120))} months</div></td>
         <td>${esc(c.minQual)} pass<div class="small muted">Age ${c.minAge}–${c.maxAge}</div></td><td>${c.seats}</td>
         <td class="small">${list('centres').filter(x=>x.active&&x.sectors.includes(c.sectorId)).map(x=>esc(x.name)).join(', ')||'—'}</td>
-        <td><button class="btn sm primary" onclick="applyFor='${c.id}';go('register')">Apply</button></td></tr>`).join('')}
+        <td><a class="btn sm primary" href="#apply/${esc(c.id)}">Apply</a></td></tr>`).join('')}
       </tbody></table></div>
     </section>`).join(''):'<div class="panel">No courses match. Clear the search or choose another sector.</div>'}`;
 }
 
-/* ---------- Registration ---------- */
-let applyFor='';
+/* ---------- Student account and application (CR-01, CR-02) ---------- */
+let applyFor='', justApplied='';
 function courseOptions(sel){
   return `<option value="">Select a course</option>`+list('sectors').map(s=>{const cs=list('courses').filter(c=>c.active&&c.sectorId===s.id);return cs.length?`<optgroup label="${esc(s.name)}">${cs.map(c=>`<option value="${c.id}" ${sel===c.id?'selected':''}>${esc(c.name)} (${c.id})</option>`).join('')}</optgroup>`:''}).join('');
 }
-function vRegister(){
-  return `${pageHead('Student registration')}
+const openApplication = () => list('students').find(a=>!CLOSED.includes(a.status));
+
+/* Log in / create account */
+function vStudent(){
+  if(!STU) return vStudentLogin();
+  const apps=list('students').sort((a,b)=>b.createdAt.localeCompare(a.createdAt)); const open=openApplication();
+  return `${pageHead('My applications','Welcome, '+STU.name+'. Follow your applications here, or apply for a trade.')}
+  <div class="row" style="justify-content:space-between;margin-bottom:14px"><span class="muted small">Logged in as ${esc(STU.email)}</span><button class="btn sm" onclick="studentLogout()">Log out</button></div>
+  ${justApplied?`<div class="callout" style="margin-bottom:16px"><b>Application submitted.</b> Your application number is <b>${esc(justApplied)}</b>. We have emailed it to ${esc(STU.email)}.</div>`:''}
+  ${apps.length?apps.map(s=>`<section style="margin-bottom:22px">${STAGE_NOTE[s.status]?`<p class="small" style="margin:0 0 8px"><b>Where it is now:</b> ${esc(STAGE_NOTE[s.status])}</p>`:''}${trackHTML(s)}</section>`).join('')
+    :'<div class="panel">You have not applied yet. Choose a trade below to start your application.</div>'}
+  <h2 style="margin-top:28px">Schemes and trades</h2>
+  <p class="muted">${open?`You can apply for another trade once application ${esc(open.id)} is closed.`:'Choose the trade you want to train in. Training is free, and every trainee who passes gets a certificate.'}</p>
+  ${list('sectors').map(sec=>{const cs=list('courses').filter(c=>c.active&&c.sectorId===sec.id);return cs.length?`<section style="margin-bottom:18px"><h3>${esc(sec.name)}</h3><div class="tw"><table><thead><tr><th>Trade</th><th>Skill ID</th><th>Duration</th><th>Eligibility</th><th></th></tr></thead><tbody>
+    ${cs.map(c=>`<tr><td>${esc(c.name)}</td><td class="id">${esc(c.id)}</td><td class="small">${c.hours} hrs</td><td class="small">${esc(c.minQual)} pass · age ${c.minAge}–${c.maxAge}</td>
+      <td>${open?'<span class="small muted">—</span>':`<a class="btn sm primary" href="#apply/${esc(c.id)}">Apply</a>`}</td></tr>`).join('')}</tbody></table></div></section>`:''}).join('')}`;
+}
+function vStudentLogin(){
+  const c=applyFor&&S.courses[applyFor];
+  return `${pageHead('Apply online','Create a student account, then choose a trade and fill in the application form.')}
+  ${c?`<div class="callout" style="margin-bottom:16px">Log in or create an account to apply for <b>${esc(c.name)}</b>.</div>`:''}
+  <div class="grid g2" style="align-items:start">
+    <div class="panel"><h3>Log in</h3><form onsubmit="event.preventDefault();studentLogin(this)">
+      <div class="field"><label>Email</label><input name="email" type="email" autocomplete="email" required></div>
+      <div class="field"><label>Password</label><input name="password" type="password" autocomplete="current-password" required></div>
+      <div class="err" id="sLoginErr"></div>
+      <div class="row" style="justify-content:space-between"><button class="btn primary">Log in</button><a href="#" onclick="event.preventDefault();forgotDialog()">Forgot password?</a></div></form></div>
+    <div class="panel"><h3>New here? Create an account</h3><form onsubmit="event.preventDefault();studentSignup(this)">
+      <div class="field"><label>Full name (as in Aadhaar)</label><input name="name" autocomplete="name" required></div>
+      <div class="grid g2"><div class="field"><label>Email</label><input name="email" type="email" autocomplete="email" required><div class="hint">Your application number and updates are sent here</div></div>
+      <div class="field"><label>Mobile number</label><input name="mobile" inputmode="numeric" maxlength="10" autocomplete="tel" required></div></div>
+      <div class="grid g2"><div class="field"><label>Password</label><input name="password" type="password" autocomplete="new-password" minlength="8" required><div class="hint">At least 8 characters, with letters and numbers</div></div>
+      <div class="field"><label>Repeat password</label><input name="password2" type="password" autocomplete="new-password" required></div></div>
+      <div class="err" id="sSignupErr"></div>
+      <button class="btn primary">Create account</button>
+      <p class="small muted" style="margin-top:10px">Creating an account is not an application. After you log in, choose a trade and apply.</p></form></div>
+  </div>`;
+}
+async function afterStudentLogin(){
+  await loadStudent(); toast('Welcome, '+STU.name+'.');
+  if(applyFor){const c=applyFor;applyFor='';go('apply/'+encodeURIComponent(c))}else if(route==='student')render();else go('student');
+}
+async function studentLogin(f){
+  const err=$('#sLoginErr'); err.textContent='';
+  try{await api('student_login',{method:'POST',data:{email:f.email.value.trim(),password:f.password.value}});await afterStudentLogin()}catch(e){err.textContent=e.message}
+}
+async function studentSignup(f){
+  const err=$('#sSignupErr'); err.textContent='';
+  if(f.password.value!==f.password2.value){err.textContent='The passwords do not match.';return}
+  try{await api('student_signup',{method:'POST',data:{name:f.name.value.trim(),email:f.email.value.trim(),mobile:f.mobile.value.trim(),password:f.password.value}});await afterStudentLogin()}
+  catch(e){err.textContent=e.message}
+}
+async function studentLogout(){
+  try{await api('logout',{method:'POST'})}catch(e){}
+  STU=null; justApplied=''; STAFF_COLLS.forEach(c=>S[c]={});
+  try{await loadPublic()}catch(e){}
+  go('home');
+}
+function forgotDialog(){
+  openModal(`<div class="mh"><h3 style="margin:0">Reset your password</h3><button class="btn sm" onclick="closeModal()">Close</button></div>
+  <form class="mb" onsubmit="event.preventDefault();sendReset(this)"><p>Enter the email of your student account. We will email you a link to set a new password.</p>
+  <div class="field"><label>Email</label><input name="email" type="email" required></div>
+  <div id="fpMsg"></div><div class="row" style="justify-content:flex-end"><button class="btn primary">Email me a link</button></div></form>`);
+}
+async function sendReset(f){
+  try{await api('forgot_password',{method:'POST',data:{email:f.email.value.trim(),base:location.origin+location.pathname}});
+    $('#fpMsg').innerHTML='<div class="callout" style="margin-bottom:12px">If an account exists for this email, a link is on its way. It works for one hour.</div>'}
+  catch(e){$('#fpMsg').innerHTML=`<p class="err">${esc(e.message)}</p>`}
+}
+function vReset(){
+  return `${pageHead('Set a new password')}<div class="panel" style="max-width:460px"><form onsubmit="event.preventDefault();doReset(this)">
+    <div class="field"><label>New password</label><input name="password" type="password" autocomplete="new-password" minlength="8" required><div class="hint">At least 8 characters, with letters and numbers</div></div>
+    <div class="field"><label>Repeat new password</label><input name="password2" type="password" autocomplete="new-password" required></div>
+    <div class="err" id="rsErr"></div><button class="btn primary">Save password and log in</button></form></div>`;
+}
+async function doReset(f){
+  const err=$('#rsErr'); err.textContent='';
+  if(f.password.value!==f.password2.value){err.textContent='The passwords do not match.';return}
+  try{await api('reset_password',{method:'POST',data:{token:routeArg,password:f.password.value}});history.replaceState(null,'','#student');route='student';await afterStudentLogin()}
+  catch(e){err.textContent=e.message}
+}
+
+/* Application form for one trade */
+function vApply(){
+  const c=S.courses[routeArg]; const open=openApplication();
+  if(!c||!c.active) return `${pageHead('Apply for a trade')}<div class="panel">This trade is not open for applications. <a href="#student">Choose another trade</a>.</div>`;
+  if(open) return `${pageHead('Apply for a trade')}<div class="panel">You already have an open application (${esc(open.id)}). You can apply again once it is closed. <a href="#student">Back to my applications</a></div>`;
+  const centres=list('centres').filter(x=>x.active&&x.sectors.includes(c.sectorId));
+  return `${pageHead('Application form',`${c.name} (${c.id})`)}
+  <div class="panel flat" style="margin-bottom:16px"><div class="row" style="justify-content:space-between"><div><b>${esc(c.name)}</b> <span class="muted small">${esc(sectorName(c.sectorId))} · ${c.hours} hours · NSQF level ${esc(c.nsqf)}</span><div class="small">Eligibility: ${esc(c.minQual)} pass, age ${c.minAge}–${c.maxAge}</div></div><a class="btn sm" href="#student">Choose a different trade</a></div></div>
   <p class="muted">Fields marked <span style="color:var(--bad)">*</span> are required. Keep scanned copies of your documents ready (JPG, PNG or PDF).</p>
-  <form id="regForm" novalidate>
+  <form id="regForm" novalidate><input type="hidden" name="pref1" value="${esc(c.id)}">
   <fieldset><legend>Aadhaar and contact</legend>
     <div class="grid g3">
       <div class="field"><label>Aadhaar number <span class="req">*</span></label><input name="aadhaar" inputmode="numeric" maxlength="14" placeholder="12-digit number" autocomplete="off"><div class="hint">Only the last 4 digits are stored on record.${DEMO?` <a href="#" onclick="event.preventDefault();document.querySelector('[name=aadhaar]').value=testAadhaar()">Fill a test number</a>`:''}</div></div>
-      <div class="field"><label>Mobile number <span class="req">*</span></label><input name="mobile" inputmode="numeric" maxlength="10" placeholder="10 digits"><div class="hint">Status updates are sent by SMS</div></div>
-      <div class="field"><label>Email</label><input name="email" type="email" placeholder="name@example.com"></div>
+      <div class="field"><label>Mobile number <span class="req">*</span></label><input name="mobile" inputmode="numeric" maxlength="10" value="${esc(STU.mobile)}"><div class="hint">Status updates are sent by SMS</div></div>
+      <div class="field"><label>Email</label><input value="${esc(STU.email)}" disabled><div class="hint">From your account. The acknowledgement is sent here.</div></div>
     </div>
   </fieldset>
   <fieldset><legend>Personal details</legend>
     <div class="grid g3">
-      <div class="field"><label>Full name (as in Aadhaar) <span class="req">*</span></label><input name="name"></div>
+      <div class="field"><label>Full name (as in Aadhaar) <span class="req">*</span></label><input name="name" value="${esc(STU.name)}"></div>
       <div class="field"><label>Father’s name <span class="req">*</span></label><input name="father"></div>
       <div class="field"><label>Mother’s name</label><input name="mother"></div>
       <div class="field"><label>Date of birth <span class="req">*</span></label><input name="dob" type="date" max="${today()}"></div>
@@ -597,18 +703,14 @@ function vRegister(){
   </fieldset>
   <fieldset><legend>Education</legend>
     <div class="grid g4">
-      <div class="field"><label>Highest qualification <span class="req">*</span></label><select name="qual"><option value="">Select</option>${QUALS.map(q=>`<option>${q}</option>`).join('')}</select></div>
+      <div class="field"><label>Highest qualification <span class="req">*</span></label><select name="qual"><option value="">Select</option>${QUALS.map(q=>`<option>${q}</option>`).join('')}</select><div id="eligNote" class="hint"></div></div>
       <div class="field"><label>Board / university</label><input name="board"></div>
       <div class="field"><label>Year of passing</label><input name="year" inputmode="numeric" maxlength="4"></div>
       <div class="field"><label>Percentage / grade</label><input name="pct"></div>
     </div>
   </fieldset>
-  <fieldset><legend>Course preference</legend>
-    <div class="grid g3">
-      <div class="field"><label>First choice <span class="req">*</span></label><select name="pref1">${courseOptions(applyFor)}</select><div id="eligNote" class="hint"></div></div>
-      <div class="field"><label>Second choice</label><select name="pref2">${courseOptions('')}</select></div>
-      <div class="field"><label>Preferred centre</label><select name="prefCentre"><option value="">Any centre</option>${list('centres').filter(c=>c.active).map(c=>`<option value="${c.id}">${esc(c.name)} (${c.id})</option>`).join('')}</select></div>
-    </div>
+  <fieldset><legend>Training centre</legend>
+    <div class="field" style="max-width:420px"><label>Preferred centre</label><select name="prefCentre"><option value="">Any centre</option>${centres.map(x=>`<option value="${esc(x.id)}">${esc(x.name)}${x.nearbyTown?' · near '+esc(x.nearbyTown):''}</option>`).join('')}</select><div class="hint">The Centre Manager allots centres after selection, keeping your preference in mind where possible.</div></div>
   </fieldset>
   <fieldset><legend>Documents</legend>
     <p class="small muted">JPG, PNG or PDF. Photos are resized automatically. PDFs can be up to 2 MB.</p>
@@ -616,7 +718,7 @@ function vRegister(){
   </fieldset>
   <div class="panel flat" style="margin-bottom:16px"><label style="display:flex;gap:10px;font-weight:500"><input type="checkbox" name="declare"> I declare that the information given is true. I consent to the use of my Aadhaar number for identity verification for this scheme only.</label></div>
   <div id="regErr" class="err" style="font-size:14px;margin-bottom:12px"></div>
-  <div class="row"><button class="btn primary" type="submit" id="regBtn">Submit application</button><a class="btn" href="#courses">Back to courses</a></div>
+  <div class="row"><button class="btn primary" type="submit" id="regBtn">Submit application</button><a class="btn" href="#student">Cancel</a></div>
   </form>`;
 }
 function eligibility(s, courseId){
@@ -626,14 +728,14 @@ function eligibility(s, courseId){
   if(QUALS.indexOf(s.qual)<QUALS.indexOf(c.minQual)) issues.push(`Needs ${c.minQual} pass (has ${s.qual||'none'})`);
   return {ok:!issues.length,issues};
 }
-function wireRegister(){
-  const f=$('#regForm'); const note=$('#eligNote');
-  const upd=()=>{const s={dob:f.dob.value,qual:f.qual.value};const c=S.courses[f.pref1.value];if(!c){note.textContent='';return}
-    if(!s.dob||!s.qual){note.textContent=`Needs ${c.minQual} pass, age ${c.minAge}–${c.maxAge}.`;note.className='hint';return}
-    const e=eligibility(s,c.id);note.textContent=e.ok?'You meet the eligibility for this course.':e.issues.join('. ')+'.';note.className=e.ok?'hint':'err'};
-  ['pref1','dob','qual'].forEach(n=>f[n].addEventListener('change',upd)); upd();
+function wireApply(){
+  const f=$('#regForm'); if(!f) return; const note=$('#eligNote');
+  const upd=()=>{const c=S.courses[f.pref1.value];if(!c)return;
+    if(!f.dob.value||!f.qual.value){note.textContent='';return}
+    const e=eligibility({dob:f.dob.value,qual:f.qual.value},c.id);note.textContent=e.ok?'You meet the eligibility for this trade.':e.issues.join('. ')+'.';note.className=e.ok?'hint':'err'};
+  ['dob','qual'].forEach(n=>f[n].addEventListener('change',upd));
   f.aadhaar.addEventListener('input',()=>{const v=f.aadhaar.value.replace(/\D/g,'').slice(0,12);f.aadhaar.value=v.replace(/(\d{4})(?=\d)/g,'$1 ')});
-  f.addEventListener('submit',submitRegistration);
+  f.addEventListener('submit',submitApplication);
 }
 function readImage(file,max=900,q=.7,type='image/jpeg'){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const k=Math.min(1,max/Math.max(im.width,im.height));const c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);const x=c.getContext('2d');if(type==='image/jpeg'){x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height)}x.drawImage(im,0,0,c.width,c.height);res(c.toDataURL(type,q))};im.onerror=()=>rej(new Error(file.name+' is not an image this browser can read.'));im.src=r.result};r.onerror=rej;r.readAsDataURL(file)})}
 /** Images are resized to a sensible size in the browser before upload; PDFs are sent as they are. */
@@ -654,14 +756,13 @@ async function addFiles(fd,form,types){
   }
 }
 const showErrors = (box,msg) => {box.innerHTML=String(msg).split('\n').map(esc).join('<br>');box.scrollIntoView({behavior:'smooth',block:'center'})};
-async function submitRegistration(e){
+async function submitApplication(e){
   e.preventDefault(); const f=e.target, err=$('#regErr'); err.textContent='';
   const v=n=>f[n].value.trim(); const aadhaar=v('aadhaar').replace(/\s/g,'');
   const problems=[];
   if(!validAadhaar(aadhaar)) problems.push('Enter a valid 12-digit Aadhaar number (the check digit does not match).');
   if(!/^[6-9]\d{9}$/.test(v('mobile'))) problems.push('Enter a valid 10-digit mobile number starting with 6–9.');
-  if(v('email')&&!/^\S+@\S+\.\S+$/.test(v('email'))) problems.push('Enter a valid email address or leave it blank.');
-  ['name','father','dob','gender','category','village','district','qual','pref1'].forEach(n=>{if(!v(n))problems.push('Fill in '+f[n].closest('.field').querySelector('label').childNodes[0].textContent.trim().toLowerCase()+'.')});
+  ['name','father','dob','gender','category','village','district','qual'].forEach(n=>{if(!v(n))problems.push('Fill in '+f[n].closest('.field').querySelector('label').childNodes[0].textContent.trim().toLowerCase()+'.')});
   if(!/^\d{6}$/.test(v('pin'))) problems.push('Enter a 6-digit PIN code.');
   DOC_TYPES.filter(d=>d.req).forEach(d=>{if(!f['doc_'+d.key].files[0])problems.push('Upload '+d.label.toLowerCase()+'.')});
   if(!f.declare.checked) problems.push('Tick the declaration to continue.');
@@ -669,12 +770,11 @@ async function submitRegistration(e){
   const btn=$('#regBtn'); btn.disabled=true; btn.textContent='Uploading documents…';
   try{
     const fd=new FormData();
-    ['mobile','email','name','father','mother','dob','gender','category','pwd','village','block','district','pin','qual','board','year','pct','pref1','pref2','prefCentre'].forEach(n=>fd.append(n,v(n)));
+    ['mobile','name','father','mother','dob','gender','category','pwd','village','block','district','pin','qual','board','year','pct','pref1','prefCentre'].forEach(n=>fd.append(n,v(n)));
     fd.append('aadhaar',aadhaar); fd.append('declare','1');
     await addFiles(fd,f,DOC_TYPES);
-    const d=await api('register',{method:'POST',form:fd});
-    applyFor=''; route='track'; history.replaceState(null,'','#track'); render();
-    showTracked(d,v('dob'),true);
+    const d=await api('apply',{method:'POST',form:fd});
+    justApplied=d.student.id; await loadStudent(); go('student');
   }catch(ex){showErrors(err,ex.message||'Could not submit. Try again.');btn.disabled=false;btn.textContent='Submit application'}
 }
 
@@ -726,17 +826,21 @@ function resubmitHTML(s){
   const flagged=(s.docs||[]).filter(d=>d.status==='rejected');
   const keys=flagged.length?flagged.map(d=>d.key):DOC_TYPES.map(d=>d.key);
   return `<hr class="sep"><h3>Correct and resubmit</h3><p class="small">${esc(s.history.slice(-1)[0]?.remark||'')}</p>
-  <form onsubmit="event.preventDefault();resubmit(this,DOC_TYPES)">${keys.map(k=>{const d=DOC_TYPES.find(x=>x.key===k);return `<div class="field"><label>${d.label}</label><input type="file" name="doc_${k}" accept="${d.img?'image/*':'image/*,application/pdf'}"></div>`}).join('')}
+  <form onsubmit="event.preventDefault();resubmit(this,DOC_TYPES,'${esc(s.id)}')">${keys.map(k=>{const d=DOC_TYPES.find(x=>x.key===k);return `<div class="field"><label>${d.label}</label><input type="file" name="doc_${k}" accept="${d.img?'image/*':'image/*,application/pdf'}"></div>`}).join('')}
   <button class="btn primary">Resubmit application</button></form>`;
 }
-/** Sends corrected documents for the application currently shown on Track status. */
-async function resubmit(f,types){
-  if(!trackFound) return;
-  const fd=new FormData(); fd.append('id',trackFound.id); fd.append('dob',trackFound.dob);
+/** Sends corrected documents: from the student's dashboard, or for the application shown on Track status. */
+async function resubmit(f,types,id){
+  const fromAccount = STU && route==='student';
+  if(!fromAccount&&!trackFound) return;
+  const fd=new FormData(); fd.append('id',fromAccount?id:trackFound.id); if(!fromAccount) fd.append('dob',trackFound.dob);
   try{await addFiles(fd,f,types)}catch(ex){toast(ex.message);return}
   if(![...fd.keys()].some(k=>k.startsWith('doc_'))){toast('Choose at least one corrected document.');return}
-  try{showTracked(await api('resubmit',{method:'POST',form:fd}),trackFound.dob,false);toast('Resubmitted. The department will check your documents again.')}
-  catch(e){toast(e.message)}
+  try{
+    const d=await api('resubmit',{method:'POST',form:fd});
+    if(fromAccount){await loadStudent();render()}else showTracked(d,trackFound.dob,false);
+    toast('Resubmitted. The Dealing Assistant will check your documents again.');
+  }catch(e){toast(e.message)}
 }
 
 /* ---------- Verify certificate ---------- */
@@ -770,7 +874,7 @@ function vLogin(){
 async function doLogin(f){
   const err=$('#loginErr'); err.textContent='';
   const btn=f.querySelector('button'); btn.disabled=true;
-  try{const r=await api('login',{method:'POST',data:{u:f.u.value.trim(),p:f.p.value}});ME=r.me;await loadStaff();staffView='dash';go('staff')}
+  try{const r=await api('login',{method:'POST',data:{u:f.u.value.trim(),p:f.p.value}});ME=r.me;STU=null;await loadStaff();staffView='dash';go('staff')}
   catch(e){err.textContent=e.message;btn.disabled=false}
 }
 async function logout(){
@@ -783,38 +887,44 @@ async function logout(){
 /* ============================== Staff area ============================== */
 const MENU=[
   ['dash','Dashboard',null],
-  ['apps','Applications',['dealing','supervising','monitoring','training','jts']],
-  ['admit','Admit cards',['supervising','monitoring']],
-  ['batches','Batches',['training','monitoring','jts','centre']],
-  ['trainers','Trainers',['dealing','training','monitoring','jts','centre']],
-  ['results','Attendance & results',['centre','training','monitoring']],
-  ['certs','Certificates',['training','jts','monitoring','centre']],
-  ['ojt','OJT letters',['training','centre','jts','monitoring']],
-  ['mapping','Centre mapping',null],
-  ['notifs','SMS & email log',['monitoring']],
+  ['apps','Applications',['dealing','supervising','jts']],
+  ['approved','Selected list',['supervising','jts']],
+  ['allot','Centre allocation',['centre']],
+  ['batches','Batches',['centre','training']],
+  ['trainers','Trainers',['dealing','training']],
+  ['results','Attendance & results',['centre','training']],
+  ['certs','Certificates',['training','centre']],
+  ['ojt','OJT letters',['training','centre','jts']],
+  ['mapping','Centre mapping',['centre','training','supervising']],
+  ['notifs','SMS & email log',['supervising']],
   ['noticesAdm','Notices & updates',['training']],
   ['extAdm','Online learning & jobs',['training']],
   ['master','Courses, sectors & centres',[]],
   ['users','Users & roles',[]],
   ['settings','Settings',[]]
 ];
-function myStudents(){const all=list('students');return ME.role==='centre'?all.filter(s=>s.centreId===ME.centreId):all}
+/* The server sends each officer only the applications their stage deals with. */
+function myStudents(){return list('students')}
+/* Which applications wait for which role (CR-03 to CR-05). */
+const QUEUE={dealing:'submitted',supervising:'verified',jts:'shortlisted'};
+const unbatched = () => myStudents().filter(s=>s.status==='approved'||(s.status==='allocated'&&!s.batchId));
 function pendingCount(v){
-  const s=myStudents();
-  if(v==='apps'){if(ME.role==='dealing')return s.filter(x=>x.status==='submitted').length;if(ME.role==='training')return s.filter(x=>x.status==='admit').length}
-  if(v==='admit'&&ME.role==='supervising')return s.filter(x=>x.status==='verified').length;
-  if(v==='ojt'&&ME.role==='jts')return list('ojt').filter(o=>o.status==='pending').length;
-  if(v==='certs'&&ME.role==='training')return s.filter(x=>x.status==='passed').length;
-  if(v==='batches'&&ME.role==='training')return s.filter(x=>x.status==='selected').length+list('batches').filter(b=>b.status!=='completed'&&!b.trainerId).length;
+  const s=myStudents(), n=k=>s.filter(x=>x.status===k).length;
+  if(v==='apps'&&QUEUE[ME.role]) return n(QUEUE[ME.role]);
+  if(v==='allot'&&ME.role==='centre') return n('approved');
+  if(v==='batches'&&ME.role==='centre') return s.filter(x=>x.status==='allocated').length;
+  if(v==='batches'&&ME.role==='training') return list('batches').filter(b=>b.status!=='completed'&&!b.trainerId).length;
+  if(v==='ojt'&&ME.role==='jts') return list('ojt').filter(o=>o.status==='pending').length;
+  if(v==='certs'&&ME.role==='training') return n('passed');
   if(v==='trainers'){if(ME.role==='dealing')return list('trainers').filter(t=>t.status==='submitted').length;if(ME.role==='training')return list('trainers').filter(t=>t.status==='verified').length}
   return 0;
 }
 function vStaff(){
   const items=MENU.filter(([k,,r])=>r===null||can(...r));
   if(!items.find(i=>i[0]===staffView)) staffView='dash';
-  const views={extAdm:sExtAdm,noticesAdm:sNoticesAdm,trainers:sTrainers,dash:sDash,apps:sApps,admit:sAdmit,batches:sBatches,results:sResults,certs:sCerts,ojt:sOjt,mapping:sMapping,notifs:sNotifs,master:sMaster,users:sUsers,settings:sSettings};
+  const views={extAdm:sExtAdm,noticesAdm:sNoticesAdm,trainers:sTrainers,dash:sDash,apps:sApps,approved:sApproved,allot:sAllot,batches:sBatches,results:sResults,certs:sCerts,ojt:sOjt,mapping:sMapping,notifs:sNotifs,master:sMaster,users:sUsers,settings:sSettings};
   return `<div class="staff"><aside class="side">
-    <div class="who"><b>${esc(ME.name)}</b><span class="small muted">${ROLES[ME.role]}${ME.centreId?' · '+esc(ME.centreId):''}</span></div>
+    <div class="who"><b>${esc(ME.name)}</b><span class="small muted">${ROLES[ME.role]}${ME.centreId?' · '+esc(centreName(ME.centreId)):''}</span></div>
     ${items.map(([k,l])=>{const n=pendingCount(k);return `<button class="nav" aria-current="${staffView===k}" onclick="staffView='${k}';render()"><span>${l}</span>${n?`<span class="badge">${n}</span>`:''}</button>`}).join('')}
     <hr class="sep" style="margin:10px 0"><button class="nav" onclick="passwordDialog()">Change my password</button><button class="nav" onclick="logout()">Log out</button>
   </aside><section>${views[staffView]()}</section></div>`;
@@ -825,56 +935,72 @@ function bars(rows){const max=Math.max(1,...rows.map(r=>r[1]));return rows.map((
 function sDash(){
   const st=myStudents(); const c=k=>st.filter(s=>s.status===k).length;
   const bySector={}; st.forEach(s=>{const sec=S.courses[s.skillId||s.pref1]?.sectorId;bySector[sec]=(bySector[sec]||0)+1});
-  const centres=list('centres').filter(x=>ME.role!=='centre'||x.id===ME.centreId);
+  const centres=list('centres').filter(x=>x.active&&(ME.role!=='centre'||!ME.centreId||x.id===ME.centreId));
   const tasks=[];
   if(can('dealing')&&c('submitted')) tasks.push([`${c('submitted')} applications waiting for document verification`,'apps']);
-  if(can('supervising')&&c('verified')) tasks.push([`${c('verified')} verified candidates need admit cards`,'admit']);
-  if(can('training')&&c('admit')) tasks.push([`${c('admit')} candidates awaiting selection after the aptitude test`,'apps']);
-  if(can('training')&&c('selected')) tasks.push([`${c('selected')} selected candidates not yet in a batch`,'batches']);
+  if(can('supervising')&&c('verified')) tasks.push([`${c('verified')} verified applications waiting to be shortlisted`,'apps']);
+  if(can('jts')&&c('shortlisted')) tasks.push([`${c('shortlisted')} shortlisted candidates waiting for your approval`,'apps']);
+  if(can('centre')&&c('approved')) tasks.push([`${c('approved')} selected candidates need a training centre`,'allot']);
+  if(can('centre')&&c('allocated')) tasks.push([`${c('allocated')} candidates allotted to a centre are not yet in a batch`,'batches']);
   if(can('dealing')){const n=list('trainers').filter(t=>t.status==='submitted').length;if(n)tasks.push([`${n} trainer registrations waiting for document verification`,'trainers'])}
-  if(can('training')){const n=list('trainers').filter(t=>t.status==='verified').length;if(n)tasks.push([`${n} verified trainers waiting to be empanelled`,'trainers']);const nb=list('batches').filter(b=>b.status!=='completed'&&!b.trainerId).length;if(nb)tasks.push([`${nb} batches have no trainer assigned`,'batches'])}
-  if(can('centre','training')&&c('training')) tasks.push([`${c('training')} trainees in progress — record results when batches finish`,'results']);
+  if(can('training')){const nb=list('batches').filter(b=>b.status!=='completed'&&!b.trainerId).length;if(nb)tasks.push([`${nb} batches need a trainer`,'batches']);const n=list('trainers').filter(t=>t.status==='verified').length;if(n)tasks.push([`${n} verified trainers waiting to be empanelled`,'trainers'])}
+  if(can('centre')&&c('training')) tasks.push([`${c('training')} trainees in progress — record results when batches finish`,'results']);
   if(can('training')&&c('passed')) tasks.push([`${c('passed')} passed trainees need certificates`,'certs']);
   if(can('jts')){const p=list('ojt').filter(o=>o.status==='pending').length;if(p)tasks.push([`${p} OJT recommendation letters waiting for your signature`,'ojt'])}
+  const label={centre:'Selected candidates',training:'Trainees in batches'}[ME.role]||'Total applications';
   return `<h1>Dashboard</h1>
   ${tasks.length?`<div class="panel" style="margin-bottom:18px"><h3>Waiting for you</h3>${tasks.map(([t,v])=>`<div class="row" style="justify-content:space-between;padding:6px 0;border-bottom:1px dashed var(--line)"><span>${t}</span><button class="btn sm" onclick="staffView='${v}';render()">Open</button></div>`).join('')}</div>`:''}
   <div class="grid g4">
-    <div class="stat"><div class="n">${st.length}</div><div class="l">${ME.role==='centre'?'Trainees at this centre':'Total registrations'}</div></div>
-    <div class="stat"><div class="n">${c('submitted')+c('verified')+c('admit')}</div><div class="l">Under process</div></div>
-    <div class="stat"><div class="n">${c('batched')+c('training')}</div><div class="l">In batches / training</div></div>
+    <div class="stat"><div class="n">${st.length}</div><div class="l">${label}</div></div>
+    <div class="stat"><div class="n">${c('submitted')+c('returned')+c('verified')+c('shortlisted')}</div><div class="l">Under review</div></div>
+    <div class="stat"><div class="n">${st.filter(s=>SELECTED_ON.includes(s.status)).length}</div><div class="l">Selected</div></div>
     <div class="stat"><div class="n">${c('certified')}</div><div class="l">Certified</div></div>
-    ${ME.role!=='centre'?`<div class="stat"><div class="n">${list('trainers').filter(t=>t.status==='empanelled').length}</div><div class="l">Empanelled trainers</div></div>`:''}
   </div>
   <div class="grid g2" style="margin-top:18px">
-    <div class="panel"><h3>Applications by status</h3>${bars(Object.keys(STATUS).map(k=>[STATUS[k][0],c(k)]).filter(r=>r[1]))}</div>
-    <div class="panel"><h3>Registrations by sector</h3>${bars(Object.entries(bySector).map(([k,n])=>[sectorName(k),n]))}</div>
+    <div class="panel"><h3>Applications by stage</h3>${bars(Object.keys(STATUS).map(k=>[STATUS[k][0],c(k)]).filter(r=>r[1]))}</div>
+    <div class="panel"><h3>Applications by sector</h3>${bars(Object.entries(bySector).map(([k,n])=>[sectorName(k),n]))}</div>
     <div class="panel"><h3>Centre utilisation</h3>${bars(centres.map(x=>[x.name,list('batches').filter(b=>b.centreId===x.id&&b.status!=='completed').reduce((a,b)=>a+b.students.length,0)]))}<p class="small muted">Trainees in active batches.</p></div>
     <div class="panel"><h3>Recent activity</h3>${st.flatMap(s=>(s.history||[]).map(h=>({...h,s}))).sort((a,b)=>b.at.localeCompare(a.at)).slice(0,8).map(h=>`<div class="small" style="padding:5px 0;border-bottom:1px dashed var(--line)"><b>${esc(h.s.id)}</b> ${esc(h.action)}<div class="muted">${fmtDT(h.at)} · ${esc(h.by)}</div></div>`).join('')||'<p class="muted small">No activity yet.</p>'}</div>
   </div>
-  ${can('monitoring')?`<div class="row" style="margin-top:18px"><button class="btn" onclick="exportCSV()">Export all applications (CSV)</button></div>`:''}`;
+  ${can('supervising')?`<div class="row" style="margin-top:18px"><button class="btn" onclick="exportCSV()">Export all applications (CSV)</button></div>`:''}`;
 }
 
-/* ---------- Applications ---------- */
-let appF={status:'',course:'',q:''};
+/* ---------- Applications: verify, shortlist, approve ---------- */
+let appF={view:'queue',status:'',course:'',q:''};
+const BULK={dealing:['verify','Forward selected to the S&M Officer'],supervising:['shortlist','Shortlist selected and forward to the Joint Secretary'],jts:['approve','Approve selected']};
 function sApps(){
+  const queue=QUEUE[ME.role]; const inQueue=queue&&appF.view==='queue';
   let st=myStudents();
-  if(appF.status) st=st.filter(s=>s.status===appF.status);
+  if(inQueue) st=st.filter(s=>s.status===queue); else if(appF.status) st=st.filter(s=>s.status===appF.status);
   if(appF.course) st=st.filter(s=>(s.skillId||s.pref1)===appF.course);
   if(appF.q){const q=appF.q.toLowerCase();st=st.filter(s=>(s.id+s.name+s.mobile+s.village).toLowerCase().includes(q))}
-  st.sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
-  const hint={dealing:'Open an application to check documents, then mark it verified, return it for correction or reject it.',supervising:'Verified applications get admit cards from the Admit cards page.',training:'After the aptitude test, open candidates with admit cards to record the score and select them.'}[ME.role]||'';
+  st.sort((a,b)=>a.createdAt.localeCompare(b.createdAt));
+  const hint={dealing:'Open each application and check every document. Forward complete applications to the Supervising & Monitoring Officer, return them to the applicant to re-upload, or reject them.',
+    supervising:'Shortlist candidates who meet the eligibility and requirements. Shortlisted candidates go to the Joint Secretary for approval.',
+    jts:'Approve the shortlist. Approved candidates are emailed that they have been selected, and the list goes to the Centre Manager.'}[ME.role]||'';
+  const bulk=inQueue&&BULK[ME.role];
   return `<h1>Applications</h1>${hint?`<p class="muted">${hint}</p>`:''}
+  ${queue?`<div class="chips" style="margin-bottom:12px"><button class="chip" aria-pressed="${appF.view==='queue'}" onclick="appF.view='queue';render()">Waiting for me (${myStudents().filter(s=>s.status===queue).length})</button><button class="chip" aria-pressed="${appF.view==='all'}" onclick="appF.view='all';render()">All applications</button></div>`:''}
   <div class="row" style="margin-bottom:12px">
-    <select style="max-width:210px" onchange="appF.status=this.value;render()"><option value="">All statuses</option>${Object.entries(STATUS).map(([k,v])=>`<option value="${k}" ${appF.status===k?'selected':''}>${v[0]}</option>`).join('')}</select>
-    <select style="max-width:260px" onchange="appF.course=this.value;render()"><option value="">All courses</option>${list('courses').map(c=>`<option value="${c.id}" ${appF.course===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select>
+    ${inQueue?'':`<select style="max-width:210px" onchange="appF.status=this.value;render()"><option value="">All stages</option>${Object.entries(STATUS).filter(([k])=>!['admit','selected','notselected'].includes(k)).map(([k,v])=>`<option value="${k}" ${appF.status===k?'selected':''}>${v[0]}</option>`).join('')}</select>`}
+    <select style="max-width:260px" onchange="appF.course=this.value;render()"><option value="">All trades</option>${list('courses').map(c=>`<option value="${c.id}" ${appF.course===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select>
     <input style="max-width:240px" placeholder="Search name, ID, mobile" value="${esc(appF.q)}" onchange="appF.q=this.value;render()">
     <span class="muted small" style="margin-left:auto">${st.length} shown</span>
   </div>
-  <div class="tw"><table><thead><tr><th>Student ID</th><th>Name</th><th>Course (1st choice)</th><th>Eligibility</th><th>Submitted</th><th>Status</th><th></th></tr></thead><tbody>
-  ${st.map(s=>{const e=eligibility(s,s.pref1);return `<tr><td class="id">${esc(s.id)}</td><td>${esc(s.name)}<div class="small muted">${esc(s.village)}, ${esc(s.district)}</div></td><td>${esc(courseName(s.pref1))}<div class="small muted">${esc(s.pref1)}</div></td>
+  ${bulk&&st.length?`<div class="row" style="margin-bottom:10px"><button class="btn primary" onclick="bulkAction('${bulk[0]}')">${bulk[1]}</button><span class="small muted">Tick the candidates first. Use Open to act on one candidate or add a remark.</span></div>`:''}
+  <div class="tw"><table><thead><tr>${bulk?`<th><input type="checkbox" aria-label="Select all" onchange="document.querySelectorAll('.appPick').forEach(i=>i.checked=this.checked)"></th>`:''}<th>Application ID</th><th>Name</th><th>Trade</th><th>Eligibility</th><th>Submitted</th><th>Stage</th><th></th></tr></thead><tbody>
+  ${st.map(s=>{const e=eligibility(s,s.pref1);return `<tr>${bulk?`<td><input type="checkbox" class="appPick" value="${esc(s.id)}" aria-label="Select ${esc(s.name)}"></td>`:''}<td class="id">${esc(s.id)}</td><td>${esc(s.name)}<div class="small muted">${esc(s.village)}, ${esc(s.district)}</div></td><td>${esc(courseName(s.pref1))}<div class="small muted">${esc(s.pref1)}</div></td>
     <td>${e.ok?'<span class="tag ok">Eligible</span>':`<span class="tag warn" title="${esc(e.issues.join('; '))}">Check</span>`}</td><td class="small">${fmtD(s.createdAt)}</td><td>${statusTag(s.status)}</td>
-    <td><button class="btn sm" onclick="openApp('${s.id}')">Open</button></td></tr>`}).join('')||'<tr><td colspan="7" class="muted">No applications match these filters.</td></tr>'}
+    <td><button class="btn sm" onclick="openApp('${esc(s.id)}')">Open</button></td></tr>`}).join('')||`<tr><td colspan="8" class="muted">${inQueue?'Nothing is waiting for you.':'No applications match these filters.'}</td></tr>`}
   </tbody></table></div>`;
+}
+async function bulkAction(action){
+  const ids=$$('.appPick:checked').map(i=>i.value);
+  if(!ids.length){toast('Tick at least one candidate.');return}
+  const what={verify:'forward',shortlist:'shortlist and forward',approve:'approve'}[action];
+  if(!confirm(`${what[0].toUpperCase()+what.slice(1)} ${ids.length} application(s)?`)) return;
+  const r=await act('bulk_action',{act:action,ids});
+  if(r){toast(`${r.done} done.`+(r.skipped.length?` ${r.skipped.length} skipped: ${action==='verify'?'a document is marked incorrect or the application':'the application'} has moved on.`:''));render()}
 }
 function openModal(html,wide){$('#modalBox').className='box'+(wide?' wide':'');$('#modalBox').innerHTML=html;$('#modal').classList.add('open');setTimeout(()=>$('#modalBox').querySelector('input,select,textarea,button')?.focus(),30)}
 function closeModal(){$('#modal').classList.remove('open');if(pendingRefresh){pendingRefresh=false;render()}}
@@ -884,17 +1010,17 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
 async function openApp(id){
   const s=S.students[id]; const e=eligibility(s,s.pref1);
   const actions=[];
-  if(can('dealing')&&s.status==='submitted') actions.push(`<button class="btn danger" onclick="appAction('${id}','reject')">Reject</button><button class="btn" onclick="appAction('${id}','return')">Return for correction</button><button class="btn primary" onclick="appAction('${id}','verify')">Mark documents verified</button>`);
-  if(can('supervising')&&s.status==='verified') actions.push(`<button class="btn danger" onclick="appAction('${id}','reject')">Reject</button><button class="btn primary" onclick="closeModal();issueAdmitDialog(['${id}'])">Issue admit card</button>`);
-  if(can('training')&&s.status==='admit') actions.push(`<button class="btn danger" onclick="appAction('${id}','notselect')">Not selected</button><button class="btn primary" onclick="appAction('${id}','select')">Select candidate</button>`);
+  if(can('dealing')&&s.status==='submitted') actions.push(`<button class="btn danger" onclick="appAction('${id}','reject')">Reject</button><button class="btn" onclick="appAction('${id}','return')">Return for re-upload</button><button class="btn primary" onclick="appAction('${id}','verify')">Verify and forward to S&amp;M Officer</button>`);
+  if(can('supervising')&&s.status==='verified') actions.push(`<button class="btn danger" onclick="appAction('${id}','notshortlist')">Not shortlisted</button><button class="btn primary" onclick="appAction('${id}','shortlist')">Shortlist and forward to Joint Secretary</button>`);
+  if(can('jts')&&s.status==='shortlisted') actions.push(`<button class="btn danger" onclick="appAction('${id}','notapprove')">Do not approve</button><button class="btn primary" onclick="appAction('${id}','approve')">Approve</button>`);
   openModal(`<div class="mh"><h3 style="margin:0">${esc(s.name)} · ${esc(s.id)}</h3><button class="btn sm" onclick="closeModal()">Close</button></div>
   <div class="mb"><div class="grid g2">
     <div><div class="row" style="align-items:flex-start;margin-bottom:12px">${s.photo?`<img class="photo" src="${esc(s.photo)}" alt="">`:''}<div>${statusTag(s.status)}<div class="small muted" style="margin-top:6px">Submitted ${fmtDT(s.createdAt)}</div></div></div>
       <dl class="kv"><dt>Aadhaar</dt><dd>XXXX XXXX ${esc(s.aadhaarLast4)}</dd><dt>Father / mother</dt><dd>${esc(s.father)}${s.mother?' / '+esc(s.mother):''}</dd><dt>Date of birth</dt><dd>${fmtD(s.dob)} (age ${age(s.dob)})</dd><dt>Gender / category</dt><dd>${esc(s.gender)} · ${esc(s.category)}${s.pwd==='Yes'?' · PwD':''}</dd>
       <dt>Mobile / email</dt><dd>${esc(s.mobile)}${s.email?'<br>'+esc(s.email):''}</dd><dt>Address</dt><dd>${esc([s.village,s.block,s.district,s.pin].filter(Boolean).join(', '))}</dd>
       <dt>Qualification</dt><dd>${esc(s.qual)}${s.board?', '+esc(s.board):''}${s.year?' ('+esc(s.year)+')':''}${s.pct?', '+esc(s.pct):''}</dd>
-      <dt>1st choice</dt><dd>${esc(courseName(s.pref1))} (${esc(s.pref1)}) ${e.ok?'<span class="tag ok">Eligible</span>':`<span class="tag warn">${esc(e.issues.join('; '))}</span>`}</dd>
-      <dt>2nd choice</dt><dd>${esc(courseName(s.pref2))}</dd><dt>Preferred centre</dt><dd>${esc(s.prefCentre?centreName(s.prefCentre)+' ('+s.prefCentre+')':'Any')}</dd>
+      <dt>Trade</dt><dd>${esc(courseName(s.pref1))} (${esc(s.pref1)}) ${e.ok?'<span class="tag ok">Eligible</span>':`<span class="tag warn">${esc(e.issues.join('; '))}</span>`}</dd>
+      ${s.pref2?`<dt>2nd choice</dt><dd>${esc(courseName(s.pref2))}</dd>`:''}<dt>Preferred centre</dt><dd>${esc(s.prefCentre?centreName(s.prefCentre)+' ('+s.prefCentre+')':'Any')}</dd>
       ${s.admit?`<dt>Admit card</dt><dd>${esc(s.admit.no)} · ${fmtD(s.admit.date)} ${esc(s.admit.time)}</dd>`:''}
       ${s.score!=null?`<dt>Aptitude score</dt><dd>${esc(s.score)}</dd>`:''}
       ${s.batchId?`<dt>Batch / centre</dt><dd>${esc(s.batchId)} · ${esc(s.centreId)}</dd>`:''}</dl></div>
@@ -904,7 +1030,7 @@ async function openApp(id){
       <div id="docView" style="margin-top:12px"></div>
       <h3 style="margin-top:16px">History</h3><ul class="tl">${[...(s.history||[])].reverse().map(h=>`<li><b>${esc(h.action)}</b>${h.remark?`<div class="small">${esc(h.remark)}</div>`:''}<small>${fmtDT(h.at)} · ${esc(h.by)} (${esc(h.role)})</small></li>`).join('')}</ul></div>
   </div>
-  ${actions.length?`<div class="field" style="margin-top:12px"><label>Remark</label><textarea id="appRemark" placeholder="Required when returning, rejecting or not selecting"></textarea></div>${s.status==='admit'?`<div class="field" style="max-width:220px"><label>Aptitude test score (out of 100)</label><input id="appScore" type="number" min="0" max="100"></div>`:''}`:''}
+  ${actions.length?`<div class="field" style="margin-top:12px"><label>Remark</label><textarea id="appRemark" placeholder="Required when returning, rejecting, not shortlisting or not approving. The applicant sees this remark."></textarea></div>`:''}
   </div>${actions.length?`<div class="mf">${actions.join('')}</div>`:''}`,true);
 }
 /** Shows an uploaded document inside the open dialog. The server checks the viewer may see it. */
@@ -916,80 +1042,151 @@ function viewDoc(docId,type){
 async function markDoc(id,key,status){if(await act('mark_doc',{kind:'student',id,key,status}))openApp(id)}
 async function appAction(id,action){
   const s=S.students[id]; const remark=($('#appRemark')?.value||'').trim();
-  if(['reject','return','notselect'].includes(action)&&!remark){toast('Add a remark explaining the reason.');$('#appRemark').focus();return}
+  if(['reject','return','notshortlist','notapprove'].includes(action)&&!remark){toast('Add a remark explaining the reason.');$('#appRemark').focus();return}
   if(action==='verify'&&s.docs.some(d=>d.status==='rejected')){toast('A document is marked incorrect. Return the application instead.');return}
-  const sc=$('#appScore')?.value??'';
-  if(await act('app_action',{id,act:action,remark,score:sc===''?null:+sc},'Saved. Applicant notified by SMS'+(s.email?' and email.':'.'))){closeModal();render()}
+  if(await act('app_action',{id,act:action,remark},'Saved. Applicant notified by SMS'+(s.email?' and email.':'.'))){closeModal();render()}
 }
 
-/* ---------- Admit cards ---------- */
-function sAdmit(){
-  const ver=myStudents().filter(s=>s.status==='verified'); const issued=myStudents().filter(s=>s.admit).sort((a,b)=>b.admit.issuedAt.localeCompare(a.admit.issuedAt));
-  return `<h1>Admit cards</h1><p class="muted">Issue admit cards to candidates whose documents are verified. Candidates can download them from Track application.</p>
-  <div class="panel" style="margin-bottom:18px"><div class="row" style="justify-content:space-between"><h3 style="margin:0">Eligible for admit card (${ver.length})</h3>
-  ${can('supervising')&&ver.length?`<button class="btn primary" onclick="issueAdmitDialog([...document.querySelectorAll('.admitPick:checked')].map(i=>i.value))">Issue to selected</button>`:''}</div>
-  <div class="tw" style="margin-top:12px"><table><thead><tr><th><input type="checkbox" aria-label="Select all" onchange="document.querySelectorAll('.admitPick').forEach(i=>i.checked=this.checked)"></th><th>Student ID</th><th>Name</th><th>Course</th><th>Eligibility</th></tr></thead><tbody>
-  ${ver.map(s=>{const e=eligibility(s,s.pref1);return `<tr><td><input type="checkbox" class="admitPick" value="${esc(s.id)}" ${e.ok?'checked':''}></td><td class="id">${esc(s.id)}</td><td>${esc(s.name)}</td><td>${esc(courseName(s.pref1))}</td><td>${e.ok?'<span class="tag ok">Eligible</span>':`<span class="tag warn">${esc(e.issues.join('; '))}</span>`}</td></tr>`}).join('')||'<tr><td colspan="5" class="muted">No verified candidates waiting.</td></tr>'}
-  </tbody></table></div></div>
-  <h3>Issued admit cards</h3><div class="tw"><table><thead><tr><th>Admit card no.</th><th>Student</th><th>Test</th><th>Venue</th><th>Status</th><th></th></tr></thead><tbody>
-  ${issued.map(s=>`<tr><td class="id">${esc(s.admit.no)}</td><td>${esc(s.name)}<div class="small muted">${esc(s.id)}</div></td><td>${fmtD(s.admit.date)} ${esc(s.admit.time)}</td><td class="small">${esc(s.admit.venue)}</td><td>${statusTag(s.status)}</td><td><button class="btn sm" onclick="openDoc('admit','${s.id}')">View</button></td></tr>`).join('')||'<tr><td colspan="6" class="muted">No admit cards issued yet.</td></tr>'}
-  </tbody></table></div>`;
+/* ---------- Selected list with Excel and PDF download (CR-06) ---------- */
+let selF={course:''};
+const approvedOn = s => (s.history||[]).find(h=>h.action.startsWith('Approved by the Joint Secretary'))?.at;
+function selectedList(){
+  return myStudents().filter(s=>SELECTED_ON.includes(s.status)&&(!selF.course||(s.skillId||s.pref1)===selF.course))
+    .sort((a,b)=>courseName(a.skillId).localeCompare(courseName(b.skillId))||a.name.localeCompare(b.name));
 }
-function issueAdmitDialog(ids){
-  if(!ids.length){toast('Select at least one candidate.');return}
-  const st=settings(); const d=new Date(Date.now()+7*864e5).toISOString().slice(0,10);
-  openModal(`<div class="mh"><h3 style="margin:0">Issue admit cards (${ids.length})</h3><button class="btn sm" onclick="closeModal()">Close</button></div>
-  <form class="mb" onsubmit="event.preventDefault();issueAdmit(${esc(JSON.stringify(ids))},this)">
-  <div class="grid g3"><div class="field"><label>Test date</label><input name="date" type="date" min="${today()}" value="${d}" required></div>
-  <div class="field"><label>Reporting time</label><input name="time" value="${esc(st.defaultTime)}" required></div>
-  <div class="field"><label>Venue</label><input name="venue" value="${esc(st.defaultVenue)}" required></div></div>
-  <div class="row" style="justify-content:flex-end"><button class="btn primary">Issue and notify</button></div></form>`);
-}
-async function issueAdmit(ids,f){
-  const r=await act('issue_admit',{ids,date:f.date.value,time:f.time.value,venue:f.venue.value});
-  if(r){toast(`${r.issued} admit card(s) issued and candidates notified.`);closeModal();render()}
-}
-
-/* ---------- Batches ---------- */
-function sBatches(){
-  const bs=list('batches').filter(b=>ME.role!=='centre'||b.centreId===ME.centreId).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
-  const waiting={}; myStudents().filter(s=>s.status==='selected').forEach(s=>waiting[s.skillId]=(waiting[s.skillId]||0)+1);
-  return `<h1>Batches</h1><p class="muted">Selected candidates are grouped by skill into batches at a training centre. Each batch links Student IDs, the Skill ID and the Centre ID.</p>
-  ${can('training')?`<div class="panel" style="margin-bottom:18px"><div class="row" style="justify-content:space-between"><h3 style="margin:0">Selected candidates waiting for a batch</h3><button class="btn primary" onclick="batchDialog()">Form a new batch</button></div>
-  <div style="margin-top:10px">${Object.keys(waiting).length?Object.entries(waiting).map(([k,n])=>`<div class="row" style="justify-content:space-between;padding:5px 0;border-bottom:1px dashed var(--line)"><span>${esc(courseName(k))} <span class="muted small">${esc(k)}</span></span><span class="row"><b>${n}</b><button class="btn sm" onclick="batchDialog('${k}')">Form batch</button></span></div>`).join(''):'<p class="muted small">No one is waiting.</p>'}</div></div>`:''}
-  <div class="tw"><table><thead><tr><th>Batch ID</th><th>Skill</th><th>Centre</th><th>Trainer</th><th>Dates</th><th>Trainees</th><th>Status</th><th></th></tr></thead><tbody>
-  ${bs.map(b=>`<tr><td class="id">${esc(b.id)}</td><td>${esc(courseName(b.courseId))}<div class="small muted">${esc(b.courseId)}</div></td><td>${esc(centreName(b.centreId))}<div class="small muted">${esc(b.centreId)}</div></td><td>${trainerLabel(b)}</td><td class="small">${fmtD(b.start)} – ${fmtD(b.end)}</td><td>${b.students.length}/${b.capacity}</td><td><span class="tag ${b.status==='completed'?'':'ok'}">${esc(b.status)}</span></td><td><button class="btn sm" onclick="openBatch('${b.id}')">Open</button></td></tr>`).join('')||'<tr><td colspan="8" class="muted">No batches yet.</td></tr>'}
-  </tbody></table></div>`;
-}
-function batchDialog(courseId=''){
-  const c=S.courses[courseId];
-  openModal(`<div class="mh"><h3 style="margin:0">Form a new batch</h3><button class="btn sm" onclick="closeModal()">Close</button></div>
-  <form class="mb" id="batchForm" onsubmit="event.preventDefault();createBatch(this)">
-  <div class="grid g3">
-    <div class="field"><label>Skill / course</label><select name="course" onchange="batchDialog(this.value)">${courseOptions(courseId)}</select></div>
-    <div class="field"><label>Training centre</label><select name="centre" onchange="batchPickList()" required><option value="">Select</option>${list('centres').filter(x=>x.active&&(!c||x.sectors.includes(c.sectorId))).map(x=>`<option value="${x.id}">${esc(x.name)} (${x.id})</option>`).join('')}</select><div class="hint">Only centres offering this sector are listed.</div></div>
-    <div class="field"><label>Capacity</label><input name="cap" type="number" min="1" value="${c?Math.min(30,c.seats):30}"></div>
-    <div class="field"><label>Start date</label><input name="start" type="date" required value="${new Date(Date.now()+14*864e5).toISOString().slice(0,10)}"></div>
-    <div class="field"><label>End date</label><input name="end" type="date" required value="${c?new Date(Date.now()+(14+Math.round(c.hours/120*30))*864e5).toISOString().slice(0,10):''}"></div>
-    <div class="field"><label>Trainer</label><select name="trainerId"><option value="">Assign later</option>${courseId?eligibleTrainers(courseId).map(t=>`<option value="${t.id}">${esc(t.name)} (${t.id}) · ${t.trnExp} yrs</option>`).join(''):''}</select><div class="hint">${courseId&&!eligibleTrainers(courseId).length?'No empanelled trainer for this skill yet':'Empanelled trainers for this skill'}</div></div>
+const SEL_COLS=['Sl. no.','Application ID','Name','Father’s name','Gender','Category','District','Trade','Approved on'];
+const selRow = (s,i) => [i+1,s.id,s.name,s.father,s.gender,s.category,s.district,courseName(s.skillId||s.pref1),fmtD(approvedOn(s))];
+const selTitle = () => `List of candidates selected for skill training${selF.course?' — '+courseName(selF.course):''}, ${YEAR}`;
+function sApproved(){
+  const rows=selectedList();
+  return `<h1>Selected list</h1><p class="muted">Candidates approved by the Joint Secretary. Download the list for file noting and for publishing in the newspaper.</p>
+  <div class="row" style="margin-bottom:12px">
+    <select style="max-width:280px" onchange="selF.course=this.value;render()"><option value="">All trades</option>${list('courses').map(c=>`<option value="${c.id}" ${selF.course===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select>
+    <span class="muted small">${rows.length} selected</span>
+    <span style="margin-left:auto" class="row"><button class="btn" onclick="downloadSelectedXlsx()" ${rows.length?'':'disabled'}>Download Excel</button><button class="btn primary" onclick="downloadSelectedPdf()" ${rows.length?'':'disabled'}>Download PDF</button></span>
   </div>
-  <h3>Choose trainees</h3><div id="pickList">${courseId?'<p class="muted small">Choose a centre to list candidates.</p>':'<p class="muted small">Choose a course first.</p>'}</div>
+  <div class="tw"><table><thead><tr>${SEL_COLS.map(h=>`<th>${esc(h)}</th>`).join('')}<th>Current stage</th></tr></thead><tbody>
+  ${rows.map((s,i)=>`<tr>${selRow(s,i).map((v,j)=>`<td class="${j===1?'id':j>3?'small':''}">${esc(v)}</td>`).join('')}<td>${statusTag(s.status)}</td></tr>`).join('')||'<tr><td colspan="10" class="muted">No candidates have been approved yet.</td></tr>'}
+  </tbody></table></div>`;
+}
+function downloadSelectedXlsx(){
+  saveBlob(`selected-candidates-${today()}.xlsx`,xlsxBlob('Selected',[selTitle()],SEL_COLS,selectedList().map(selRow)));
+}
+async function downloadSelectedPdf(){
+  try{await loadScript('assets/vendor/jspdf-2.5.2.umd.min.js');await loadScript('assets/vendor/jspdf-autotable-3.8.4.min.js')}
+  catch(e){toast(e.message);return}
+  const {jsPDF}=window.jspdf; const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'}); const st=settings(); const W=doc.internal.pageSize.getWidth();
+  doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.text(st.deptName,W/2,14,{align:'center'});
+  doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.text(`${st.council}, ${st.address}`,W/2,20,{align:'center'});
+  doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.text(selTitle(),W/2,29,{align:'center'});
+  doc.autoTable({head:[SEL_COLS],body:selectedList().map(selRow),startY:34,styles:{fontSize:9,cellPadding:1.8},headStyles:{fillColor:[30,74,59]},
+    didDrawPage:()=>{doc.setFont('helvetica','normal');doc.setFontSize(8);const p=doc.internal.getCurrentPageInfo().pageNumber;
+      doc.text(`Generated on ${fmtDT(nowISO())} · Page ${p}`,W-14,doc.internal.pageSize.getHeight()-8,{align:'right'})}});
+  doc.save(`selected-candidates-${today()}.pdf`);
+}
+function loadScript(src){return new Promise((res,rej)=>{if(document.querySelector(`script[src="${src}"]`))return res();const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=()=>rej(new Error('Could not load the PDF tool. Check your connection and try again.'));document.head.appendChild(s)})}
+
+/* A minimal .xlsx writer (one sheet, text and numbers, bold title and header) so Excel files need no library. */
+function xlsxBlob(sheet,titleRows,header,rows){
+  const x=v=>String(v??'').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g,'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const col=i=>{let s='';for(i++;i;i=Math.floor((i-1)/26))s=String.fromCharCode(65+(i-1)%26)+s;return s};
+  const cell=(v,r,c,bold)=>typeof v==='number'?`<c r="${col(c)}${r}"${bold?' s="1"':''}><v>${v}</v></c>`:`<c r="${col(c)}${r}" t="inlineStr"${bold?' s="1"':''}><is><t xml:space="preserve">${x(v)}</t></is></c>`;
+  const all=[...titleRows.map(t=>[t]),[],header,...rows]; const bold=new Set([...titleRows.keys(),titleRows.length+1]);
+  const widths=header.map((h,i)=>Math.min(40,Math.max(String(h).length,...rows.map(r=>String(r[i]??'').length))+2));
+  const sheetXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols>${widths.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('')}</cols><sheetData>${all.map((r,ri)=>`<row r="${ri+1}">${r.map((v,ci)=>cell(v,ri+1,ci,bold.has(ri))).join('')}</row>`).join('')}</sheetData></worksheet>`;
+  const enc=new TextEncoder(); const f=(name,s)=>({name,data:enc.encode(s)});
+  return zipStore([
+    f('[Content_Types].xml','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>'),
+    f('_rels/.rels','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'),
+    f('xl/workbook.xml',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${x(sheet)}" sheetId="1" r:id="rId1"/></sheets></workbook>`),
+    f('xl/_rels/workbook.xml.rels','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'),
+    f('xl/styles.xml','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>'),
+    f('xl/worksheets/sheet1.xml',sheetXml),
+  ]);
+}
+function crc32(b){let crc=-1;for(let i=0;i<b.length;i++){let c=(crc^b[i])&255;for(let k=0;k<8;k++)c=c&1?(c>>>1)^0xEDB88320:c>>>1;crc=(crc>>>8)^c}return (crc^-1)>>>0}
+/** A ZIP archive with uncompressed ("stored") entries — all an .xlsx needs. */
+function zipStore(files){
+  const enc=new TextEncoder(), parts=[], central=[]; let offset=0;
+  for(const f of files){
+    const name=enc.encode(f.name), crc=crc32(f.data), n=f.data.length;
+    const h=new DataView(new ArrayBuffer(30)); [[0,0x04034b50,4],[4,20,2],[6,0x0800,2],[12,0x21,2],[14,crc,4],[18,n,4],[22,n,4],[26,name.length,2]].forEach(([o,v,w])=>w===4?h.setUint32(o,v,true):h.setUint16(o,v,true));
+    const c=new DataView(new ArrayBuffer(46)); [[0,0x02014b50,4],[4,20,2],[6,20,2],[8,0x0800,2],[14,0x21,2],[16,crc,4],[20,n,4],[24,n,4],[28,name.length,2],[42,offset,4]].forEach(([o,v,w])=>w===4?c.setUint32(o,v,true):c.setUint16(o,v,true));
+    parts.push(new Uint8Array(h.buffer),name,f.data); central.push(new Uint8Array(c.buffer),name); offset+=30+name.length+n;
+  }
+  const size=central.reduce((a,b)=>a+b.length,0), e=new DataView(new ArrayBuffer(22));
+  e.setUint32(0,0x06054b50,true); e.setUint16(8,files.length,true); e.setUint16(10,files.length,true); e.setUint32(12,size,true); e.setUint32(16,offset,true);
+  return new Blob([...parts,...central,new Uint8Array(e.buffer)],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+}
+
+/* ---------- Centre allocation (CR-07) ---------- */
+let allotF={course:''};
+/* A Centre Manager linked to one centre works only with that centre; one with no centre manages all of them. */
+const inMyCentre = id => ME.role!=='centre'||!ME.centreId||id===ME.centreId;
+function sAllot(){
+  const st=unbatched().filter(s=>!allotF.course||s.skillId===allotF.course).sort((a,b)=>(a.status===b.status?0:a.status==='approved'?-1:1)||a.name.localeCompare(b.name));
+  const centres=list('centres').filter(x=>x.active&&(!ME.centreId||x.id===ME.centreId));
+  return `<h1>Centre allocation</h1><p class="muted">Allot each selected candidate to a training centre that offers their trade. Candidates can be moved to another centre until they are placed in a batch. Then form batches on the Batches page.</p>
+  <div class="row" style="margin-bottom:12px">
+    <select style="max-width:280px" onchange="allotF.course=this.value;render()"><option value="">All trades</option>${list('courses').map(c=>`<option value="${c.id}" ${allotF.course===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select>
+    <span class="muted small">${st.filter(s=>s.status==='approved').length} waiting · ${st.filter(s=>s.status==='allocated').length} allotted</span>
+  </div>
+  ${st.length?`<div class="panel flat row" style="margin-bottom:12px"><label for="allotCentre" style="margin:0">Allot the ticked candidates to</label>
+    <select id="allotCentre" style="max-width:340px"><option value="">Choose a centre</option>${centres.map(x=>`<option value="${esc(x.id)}">${esc(x.name)} · ${x.capacity} per batch · ${esc(x.sectors.map(sectorName).join(', '))}</option>`).join('')}</select>
+    <button class="btn primary" onclick="allotSelected()">Allot</button></div>`:''}
+  <div class="tw"><table><thead><tr><th><input type="checkbox" aria-label="Select all" onchange="document.querySelectorAll('.allotPick').forEach(i=>i.checked=this.checked)"></th><th>Application ID</th><th>Name</th><th>Trade</th><th>Preferred centre</th><th>Allotted centre</th><th>Stage</th></tr></thead><tbody>
+  ${st.map(s=>`<tr><td><input type="checkbox" class="allotPick" value="${esc(s.id)}" ${s.status==='approved'?'':''} aria-label="Select ${esc(s.name)}"></td><td class="id">${esc(s.id)}</td><td>${esc(s.name)}<div class="small muted">${esc(s.village)}, ${esc(s.district)}</div></td>
+    <td>${esc(courseName(s.skillId))}</td><td class="small">${esc(s.prefCentre?centreName(s.prefCentre):'Any')}</td><td class="small">${s.centreId?esc(centreName(s.centreId)):'—'}</td><td>${statusTag(s.status)}</td></tr>`).join('')||'<tr><td colspan="7" class="muted">No selected candidates are waiting for a centre.</td></tr>'}
+  </tbody></table></div>`;
+}
+async function allotSelected(){
+  const ids=$$('.allotPick:checked').map(i=>i.value), centre=$('#allotCentre').value;
+  if(!ids.length){toast('Tick at least one candidate.');return}
+  if(!centre){toast('Choose a centre.');return}
+  const c=S.centres[centre], wrong=ids.filter(id=>!c.sectors.includes(S.courses[S.students[id].skillId]?.sectorId));
+  if(wrong.length){toast(`${c.name} does not offer the trade of ${wrong.length} ticked candidate(s).`);return}
+  const r=await act('allocate',{ids,centre});
+  if(r){toast(`${r.done} candidate(s) allotted to ${c.name}. They have been notified.`);render()}
+}
+
+/* ---------- Batches: formed by the Centre Manager, trainers assigned by the Training Manager (CR-07, CR-08) ---------- */
+const batchLimit = centreId => Math.min(MAXBATCH, S.centres[centreId]?.capacity||MAXBATCH);
+function sBatches(){
+  const bs=list('batches').sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
+  const groups={}; myStudents().filter(s=>s.status==='allocated').forEach(s=>{const k=s.centreId+'|'+s.skillId;(groups[k]=groups[k]||[]).push(s)});
+  const hint=can('centre')&&!can('training')?`Form batches from candidates allotted to a centre. One batch has candidates of a single trade, at most ${MAXBATCH} or what the centre can hold.`
+    :'Batches formed by the Centre Manager. Assign an empanelled trainer to each batch.';
+  return `<h1>Batches</h1><p class="muted">${hint}</p>
+  ${can('centre')?`<div class="panel" style="margin-bottom:18px"><h3>Allotted candidates waiting for a batch</h3>
+  ${Object.keys(groups).length?`<div class="tw"><table><thead><tr><th>Centre</th><th>Trade</th><th>Waiting</th><th>Batch limit</th><th></th></tr></thead><tbody>${Object.entries(groups).map(([k,arr])=>{const [cen,cid]=k.split('|');return `<tr><td>${esc(centreName(cen))}</td><td>${esc(courseName(cid))}</td><td><b>${arr.length}</b></td><td>${batchLimit(cen)}</td><td><button class="btn sm primary" onclick="batchDialog('${esc(cid)}','${esc(cen)}')">Form batch</button></td></tr>`}).join('')}</tbody></table></div>`
+    :'<p class="muted small">No one is waiting. Allot selected candidates to centres first.</p>'}</div>`:''}
+  <div class="tw"><table><thead><tr><th>Batch ID</th><th>Trade</th><th>Centre</th><th>Trainer</th><th>Dates</th><th>Trainees</th><th>Status</th><th></th></tr></thead><tbody>
+  ${bs.map(b=>`<tr><td class="id">${esc(b.id)}</td><td>${esc(courseName(b.courseId))}<div class="small muted">${esc(b.courseId)}</div></td><td>${esc(centreName(b.centreId))}<div class="small muted">${esc(b.centreId)}</div></td><td>${trainerLabel(b)}</td><td class="small">${fmtD(b.start)} – ${fmtD(b.end)}</td><td>${b.students.length}/${b.capacity}</td><td><span class="tag ${b.status==='completed'?'':'ok'}">${esc(b.status)}</span></td>
+    <td class="row" style="gap:6px">${can('training')&&!b.trainerId&&b.status!=='completed'?`<button class="btn sm primary" onclick="assignDialog('${esc(b.id)}')">Assign trainer</button>`:''}<button class="btn sm" onclick="openBatch('${esc(b.id)}')">Open</button></td></tr>`).join('')||'<tr><td colspan="8" class="muted">No batches yet.</td></tr>'}
+  </tbody></table></div>`;
+}
+function batchDialog(courseId,centreId){
+  const c=S.courses[courseId], limit=batchLimit(centreId);
+  const ss=myStudents().filter(s=>s.status==='allocated'&&s.centreId===centreId&&s.skillId===courseId).sort((a,b)=>a.createdAt.localeCompare(b.createdAt));
+  const start=new Date(Date.now()+14*864e5).toISOString().slice(0,10), end=new Date(Date.now()+(14+Math.round(c.hours/120*30))*864e5).toISOString().slice(0,10);
+  openModal(`<div class="mh"><h3 style="margin:0">Form a batch</h3><button class="btn sm" onclick="closeModal()">Close</button></div>
+  <form class="mb" id="batchForm" onsubmit="event.preventDefault();createBatch(this,'${esc(courseId)}','${esc(centreId)}',${limit})">
+  <dl class="kv"><dt>Trade</dt><dd>${esc(c.name)} (${esc(c.id)})</dd><dt>Centre</dt><dd>${esc(centreName(centreId))} — up to ${limit} trainees per batch</dd></dl>
+  <div class="grid g2" style="margin-top:10px"><div class="field"><label>Start date</label><input name="start" type="date" min="${today()}" required value="${start}"></div>
+  <div class="field"><label>End date</label><input name="end" type="date" required value="${end}"></div></div>
+  <h3>Trainees <span class="small muted" id="bpCount"></span></h3>
+  <div class="tw"><table><thead><tr><th></th><th>Application ID</th><th>Name</th><th>Applied</th></tr></thead><tbody>${ss.map((s,i)=>`<tr><td><input type="checkbox" class="bpick" value="${esc(s.id)}" ${i<limit?'checked':''} onchange="bpCount(${limit})"></td><td class="id">${esc(s.id)}</td><td>${esc(s.name)}</td><td class="small">${fmtD(s.createdAt)}</td></tr>`).join('')}</tbody></table></div>
   <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn primary">Create batch and notify trainees</button></div></form>`,true);
+  bpCount(limit);
 }
-function batchPickList(){
-  const f=$('#batchForm'); const cid=f.course.value, cen=f.centre.value;
-  const ss=myStudents().filter(s=>s.status==='selected'&&s.skillId===cid).sort((a,b)=>(b.prefCentre===cen)-(a.prefCentre===cen)||(b.score||0)-(a.score||0));
-  $('#pickList').innerHTML=ss.length?`<div class="tw"><table><thead><tr><th></th><th>Student ID</th><th>Name</th><th>Score</th><th>Preferred centre</th></tr></thead><tbody>${ss.map(s=>`<tr><td><input type="checkbox" class="bpick" value="${esc(s.id)}" ${(!s.prefCentre||s.prefCentre===cen)?'checked':''}></td><td class="id">${esc(s.id)}</td><td>${esc(s.name)}</td><td>${s.score??'—'}</td><td class="small">${esc(s.prefCentre||'Any')}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted small">No selected candidates for this skill.</p>';
-}
-async function createBatch(f){
-  const ids=$$('.bpick:checked').map(i=>i.value); const cap=+f.cap.value;
-  if(!f.course.value||!f.centre.value){toast('Choose a course and centre.');return}
+function bpCount(limit){const n=$$('.bpick:checked').length;$('#bpCount').textContent=`${n} of at most ${limit} selected`;$('#bpCount').className='small '+(n>limit?'err':'muted')}
+async function createBatch(f,course,centre,limit){
+  const ids=$$('.bpick:checked').map(i=>i.value);
   if(!ids.length){toast('Choose at least one trainee.');return}
-  if(ids.length>cap){toast(`You picked ${ids.length} trainees but capacity is ${cap}.`);return}
+  if(ids.length>limit){toast(`This centre can take at most ${limit} trainees in one batch.`);return}
   if(f.end.value<=f.start.value){toast('End date must be after the start date.');return}
-  if(f.trainerId.value){const c=trainerClash(f.trainerId.value,f.start.value,f.end.value);if(c){toast(`The chosen trainer is busy with ${c.id} on those dates. Pick another or assign later.`);return}}
-  const r=await act('create_batch',{course:f.course.value,centre:f.centre.value,cap,start:f.start.value,end:f.end.value,trainerId:f.trainerId.value,ids});
-  if(r){toast(`Batch ${r.id} created with ${ids.length} trainees.`);closeModal();render()}
+  const r=await act('create_batch',{course,centre,start:f.start.value,end:f.end.value,ids});
+  if(r){toast(`Batch ${r.id} created with ${ids.length} trainees. The Training Manager will assign a trainer.`);closeModal();render()}
 }
 function openBatch(id){
   const b=S.batches[id]; const st=b.students.map(x=>S.students[x]).filter(Boolean);
@@ -1124,7 +1321,7 @@ function tResubmitHTML(t){
 let trF={status:'',course:'',q:''};
 function sTrainers(){
   let ts=list('trainers');
-  if(ME.role==='centre'){const mine=new Set(list('batches').filter(b=>b.centreId===ME.centreId).map(b=>b.trainerId));ts=ts.filter(t=>mine.has(t.id))}
+  if(ME.role==='centre'){const mine=new Set(list('batches').filter(b=>inMyCentre(b.centreId)).map(b=>b.trainerId));ts=ts.filter(t=>mine.has(t.id))}
   if(trF.status) ts=ts.filter(t=>t.status===trF.status);
   if(trF.course) ts=ts.filter(t=>(t.courses||[]).includes(trF.course));
   if(trF.q){const q=trF.q.toLowerCase();ts=ts.filter(t=>(t.id+t.name+t.mobile+t.specialisation).toLowerCase().includes(q))}
@@ -1209,8 +1406,8 @@ async function unassignTrainer(bid){
 
 /* ---------- Results ---------- */
 function sResults(){
-  const bs=list('batches').filter(b=>b.status==='ongoing'&&(ME.role!=='centre'||b.centreId===ME.centreId));
-  const done=list('batches').filter(b=>b.status==='completed'&&(ME.role!=='centre'||b.centreId===ME.centreId));
+  const bs=list('batches').filter(b=>b.status==='ongoing'&&inMyCentre(b.centreId));
+  const done=list('batches').filter(b=>b.status==='completed'&&inMyCentre(b.centreId));
   return `<h1>Attendance & results</h1><p class="muted">Record attendance and assessment marks when a batch finishes. Trainees with at least 70% attendance and 50 marks pass.</p>
   ${bs.map(b=>{const st=b.students.map(x=>S.students[x]).filter(Boolean);return `<div class="panel" style="margin-bottom:16px"><div class="row" style="justify-content:space-between"><h3 style="margin:0">${esc(b.id)} · ${esc(courseName(b.courseId))}</h3><span class="small muted">${esc(centreName(b.centreId))} · Trainer: ${S.trainers[b.trainerId]?esc(S.trainers[b.trainerId].name):'not assigned'} · ends ${fmtD(b.end)}</span></div>
     <form onsubmit="event.preventDefault();saveResults('${b.id}',this)"><div class="tw" style="margin-top:10px"><table><thead><tr><th>Student ID</th><th>Name</th><th>Attendance %</th><th>Marks /100</th></tr></thead><tbody>
@@ -1242,7 +1439,7 @@ async function issueCerts(ids){
 
 /* ---------- OJT letters ---------- */
 function sOjt(){
-  const os=list('ojt').filter(o=>ME.role!=='centre'||S.students[o.studentId]?.centreId===ME.centreId).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
+  const os=list('ojt').filter(o=>inMyCentre(S.students[o.studentId]?.centreId)).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
   return `<h1>OJT recommendation letters</h1><p class="muted">Certified trainees can be recommended for on-the-job training. The Joint Secretary signs each letter.</p>
   ${can('training','centre')?`<button class="btn primary" style="margin-bottom:14px" onclick="ojtDialog()">Draft a recommendation letter</button>`:''}
   <div class="tw"><table><thead><tr><th>Letter no.</th><th>Trainee</th><th>Employer</th><th>Start</th><th>Status</th><th></th></tr></thead><tbody>
@@ -1285,7 +1482,7 @@ async function signOjt(id,f){
 function sMapping(){
   const st=myStudents().filter(s=>s.centreId);
   return `<h1>Centre mapping</h1><p class="muted">Every trainee placed in a batch is mapped to a Skill ID, a Centre ID and the batch’s trainer.</p>
-  <div class="grid g3" style="margin-bottom:18px">${list('centres').filter(c=>ME.role!=='centre'||c.id===ME.centreId).map(c=>`<div class="panel flat"><b>${esc(c.id)}</b><div>${esc(c.name)}</div><div class="small muted">${c.sectors.map(sectorName).join(', ')}</div><div class="small" style="margin-top:6px">${st.filter(s=>s.centreId===c.id).length} trainees mapped</div></div>`).join('')}</div>
+  <div class="grid g3" style="margin-bottom:18px">${list('centres').filter(c=>inMyCentre(c.id)).map(c=>`<div class="panel flat"><b>${esc(c.id)}</b><div>${esc(c.name)}</div><div class="small muted">${c.sectors.map(sectorName).join(', ')}</div><div class="small" style="margin-top:6px">${st.filter(s=>s.centreId===c.id).length} trainees mapped</div></div>`).join('')}</div>
   <div class="tw"><table><thead><tr><th>Student ID</th><th>Name</th><th>Skill ID</th><th>Skill</th><th>Centre ID</th><th>Batch ID</th><th>Trainer ID</th><th>Status</th></tr></thead><tbody>
   ${st.map(s=>`<tr><td class="id">${esc(s.id)}</td><td>${esc(s.name)}</td><td class="id">${esc(s.skillId)}</td><td>${esc(courseName(s.skillId))}</td><td class="id">${esc(s.centreId)}</td><td>${esc(s.batchId)}</td><td class="id">${esc(S.batches[s.batchId]?.trainerId||'—')}</td><td>${statusTag(s.status)}</td></tr>`).join('')||'<tr><td colspan="8" class="muted">No trainees mapped yet. Mapping happens when a batch is formed.</td></tr>'}
   </tbody></table></div>`;
@@ -1297,7 +1494,7 @@ function sNotifs(){
   const ns=list('notifs').filter(n=>!notifCh||n.channel===notifCh).sort((a,b)=>b.at.localeCompare(a.at)).slice(0,300);
   const st=settings();
   return `<h1>SMS & email log</h1>
-  ${!st.smsGateway||!st.emailFrom?`<div class="callout" style="margin-bottom:14px">Messages are generated and logged for every status change. ${!st.smsGateway?'No SMS gateway is connected. ':''}${!st.emailFrom?'No mail server is connected. ':''}Delivery starts once the department’s DLT-registered SMS gateway and mail server are connected on the server side.</div>`:''}
+  <div class="callout" style="margin-bottom:14px">A message is generated for every status change. Emails are sent by the mail worker: <b>Sent</b> means the mail server accepted it, <b>Queued</b> means it is waiting, and <b>Logged</b> means no mail server is configured yet. ${!st.smsGateway?'SMS messages are logged only, because no SMS gateway is connected.':''}</div>
   <div class="chips" style="margin-bottom:12px">${['','SMS','Email'].map(c=>`<button class="chip" aria-pressed="${notifCh===c}" onclick="notifCh='${c}';render()">${c||'All'}</button>`).join('')}</div>
   <div class="tw"><table><thead><tr><th>Time</th><th>Channel</th><th>To</th><th>Message</th><th>Status</th></tr></thead><tbody>
   ${ns.map(n=>`<tr><td class="small" style="white-space:nowrap">${fmtDT(n.at)}</td><td><span class="tag">${n.channel}</span></td><td class="small">${esc(n.to)}<div class="muted">${esc(n.studentId)}</div></td><td class="small">${n.subject?`<b>${esc(n.subject)}</b><br>`:''}${esc(n.body)}</td><td class="small">${esc(n.status)}</td></tr>`).join('')||'<tr><td colspan="5" class="muted">No messages yet.</td></tr>'}
@@ -1311,7 +1508,7 @@ function sMaster(){
   let body='';
   if(masterTab==='courses') body=`<div class="tw"><table><thead><tr><th>Skill ID</th><th>Course</th><th>Sector</th><th>NSQF</th><th>Hours</th><th>Min. qualification</th><th>Age</th><th>Seats</th><th>Active</th><th></th></tr></thead><tbody>${list('courses').sort((a,b)=>a.id.localeCompare(b.id)).map(c=>`<tr><td class="id">${esc(c.id)}</td><td>${esc(c.name)}</td><td>${esc(sectorName(c.sectorId))}</td><td>${c.nsqf}</td><td>${c.hours}</td><td>${esc(c.minQual)}</td><td>${c.minAge}–${c.maxAge}</td><td>${c.seats}</td><td>${c.active?'Yes':'No'}</td><td><button class="btn sm" onclick="editRec('courses','${c.id}')">Edit</button></td></tr>`).join('')}</tbody></table></div>`;
   if(masterTab==='sectors') body=`<div class="tw"><table><thead><tr><th>Sector ID</th><th>Name</th><th>Description</th><th>Courses</th><th></th></tr></thead><tbody>${list('sectors').map(s=>`<tr><td class="id">${esc(s.id)}</td><td>${esc(s.name)}</td><td class="small">${esc(s.desc)}</td><td>${list('courses').filter(c=>c.sectorId===s.id).length}</td><td><button class="btn sm" onclick="editRec('sectors','${s.id}')">Edit</button></td></tr>`).join('')}</tbody></table></div>`;
-  if(masterTab==='centres') body=`<div class="tw"><table><thead><tr><th>Centre ID</th><th>Name</th><th>District</th><th>Sectors</th><th>Capacity</th><th>Manager</th><th>Active</th><th></th></tr></thead><tbody>${list('centres').sort((a,b)=>a.id.localeCompare(b.id)).map(c=>`<tr><td class="id">${esc(c.id)}</td><td>${esc(c.name)}<div class="small muted">${esc(c.address)}</div></td><td>${esc(c.district)}</td><td class="small">${c.sectors.map(sectorName).join(', ')}</td><td>${c.capacity}</td><td class="small">${list('users').filter(u=>u.role==='centre'&&u.centreId===c.id).map(u=>esc(u.name)).join(', ')||'—'}</td><td>${c.active?'Yes':'No'}</td><td><button class="btn sm" onclick="editRec('centres','${c.id}')">Edit</button></td></tr>`).join('')}</tbody></table></div>`;
+  if(masterTab==='centres') body=`<div class="tw"><table><thead><tr><th>Centre ID</th><th>Name</th><th>Type</th><th>Nearby town</th><th>Sectors</th><th>Per batch</th><th>Facilities</th><th>Active</th><th></th></tr></thead><tbody>${list('centres').sort((a,b)=>a.id.localeCompare(b.id)).map(c=>`<tr><td class="id">${esc(c.id)}</td><td>${esc(c.name)}<div class="small muted">${esc(c.address)}, ${esc(c.district)}</div></td><td class="small">${esc(c.type)}${c.hod?`<div class="muted">HoD: ${esc(c.hod)}</div>`:''}</td><td class="small">${esc(c.nearbyTown||'—')}</td><td class="small">${c.sectors.map(sectorName).join(', ')}</td><td>${c.capacity}</td><td class="small">${esc(c.facilities||'—')}</td><td>${c.active?'Yes':'No'}</td><td><button class="btn sm" onclick="editRec('centres','${esc(c.id)}')">Edit</button></td></tr>`).join('')}</tbody></table></div>`;
   return `<h1>Courses, sectors & centres</h1>
   <div class="row" style="margin-bottom:14px"><div class="chips">${tabs.map(([k,l])=>`<button class="chip" aria-pressed="${masterTab===k}" onclick="masterTab='${k}';render()">${l}</button>`).join('')}</div>
   <button class="btn primary" style="margin-left:auto" onclick="editRec('${masterTab}')">Add ${masterTab.slice(0,-1)}</button></div>${body}`;
@@ -1335,9 +1532,13 @@ function editRec(coll,id){
     <div class="field"><label>Centre name</label><input name="name" value="${esc(r?.name||'')}" required></div>
     <div class="field"><label>District</label><select name="district"><option ${r?.district==='Karbi Anglong'?'selected':''}>Karbi Anglong</option><option ${r?.district==='West Karbi Anglong'?'selected':''}>West Karbi Anglong</option></select></div>
     <div class="field"><label>Address</label><input name="address" value="${esc(r?.address||'')}"></div>
+    <div class="field"><label>Nearby town</label><input name="nearbyTown" value="${esc(r?.nearbyTown||'')}"></div>
     <div class="field"><label>Phone</label><input name="phone" value="${esc(r?.phone||'')}"></div>
-    <div class="field"><label>Capacity (trainees)</label><input name="capacity" type="number" value="${r?.capacity||100}"></div>
+    <div class="field"><label>Type</label><select name="type" onchange="document.getElementById('hodField').hidden=this.value!=='Government institute'"><option ${r?.type!=='Private'?'selected':''}>Government institute</option><option ${r?.type==='Private'?'selected':''}>Private</option></select></div>
+    <div class="field" id="hodField" ${r?.type==='Private'?'hidden':''}><label>Head of Department</label><input name="hod" value="${esc(r?.hod||'')}" placeholder="Name and designation"><div class="hint">Required for Government institutes</div></div>
+    <div class="field"><label>Capacity (trainees per batch)</label><input name="capacity" type="number" min="1" max="500" value="${r?.capacity||30}" required><div class="hint">Batches here are limited to this, and never more than ${MAXBATCH}</div></div>
     <div class="field"><label>Active</label><select name="active"><option value="1">Yes</option><option value="0" ${r&&!r.active?'selected':''}>No</option></select></div></div>
+    <div class="field"><label>Facilities</label><textarea name="facilities" rows="2" placeholder="e.g. computer lab with 30 systems, workshop, hostel">${esc(r?.facilities||'')}</textarea></div>
     <div class="field"><label>Sectors offered</label><div class="chips">${list('sectors').map(s=>`<label class="chip" style="font-weight:500"><input type="checkbox" name="sec" value="${s.id}" ${r?.sectors?.includes(s.id)?'checked':''}> ${esc(s.name)}</label>`).join('')}</div></div>`}
   openModal(`<div class="mh"><h3 style="margin:0">${isNew?'Add':'Edit'} ${coll.slice(0,-1)}</h3><button class="btn sm" onclick="closeModal()">Close</button></div>
   <form class="mb" onsubmit="event.preventDefault();saveRec('${coll}',this,${isNew})">${f}
@@ -1349,7 +1550,8 @@ async function saveRec(coll,f,isNew){
   const o={id};
   if(coll==='courses') Object.assign(o,{name:f.name.value,sectorId:f.sectorId.value,nsqf:+f.nsqf.value,hours:+f.hours.value,minQual:f.minQual.value,minAge:+f.minAge.value,maxAge:+f.maxAge.value,seats:+f.seats.value,active:f.active.value==='1'});
   if(coll==='sectors') Object.assign(o,{name:f.name.value,desc:f.desc.value});
-  if(coll==='centres') Object.assign(o,{name:f.name.value,district:f.district.value,address:f.address.value,phone:f.phone.value,capacity:+f.capacity.value,active:f.active.value==='1',sectors:[...f.querySelectorAll('[name=sec]:checked')].map(i=>i.value)});
+  if(coll==='centres') Object.assign(o,{name:f.name.value,district:f.district.value,address:f.address.value,phone:f.phone.value,capacity:+f.capacity.value,active:f.active.value==='1',sectors:[...f.querySelectorAll('[name=sec]:checked')].map(i=>i.value),
+    type:f.type.value,hod:f.type.value==='Government institute'?f.hod.value.trim():'',nearbyTown:f.nearbyTown.value.trim(),facilities:f.facilities.value.trim()});
   if(await act('save_master',{coll,isNew,data:o},'Saved.')){closeModal();render()}
 }
 async function removeRec(coll,id){
@@ -1372,7 +1574,7 @@ function editUser(id){
   <div class="field"><label>Username</label><input name="id" value="${esc(u?.id||'')}" ${u?'readonly':''} required></div>
   <div class="field"><label>Full name</label><input name="name" value="${esc(u?.name||'')}" required></div>
   <div class="field"><label>Role</label><select name="role">${Object.entries(ROLES).map(([k,v])=>`<option value="${k}" ${u?.role===k?'selected':''}>${v}</option>`).join('')}</select></div>
-  <div class="field"><label>Centre (Centre Manager only)</label><select name="centreId"><option value="">—</option>${list('centres').map(c=>`<option value="${c.id}" ${u?.centreId===c.id?'selected':''}>${esc(c.name)} (${c.id})</option>`).join('')}</select></div>
+  <div class="field"><label>Centre (Centre Manager only, optional)</label><select name="centreId"><option value="">All centres</option>${list('centres').map(c=>`<option value="${c.id}" ${u?.centreId===c.id?'selected':''}>${esc(c.name)} (${c.id})</option>`).join('')}</select></div>
   <div class="field"><label>${u?'New password (leave blank to keep)':'Password'}</label><input name="pw" type="password" ${u?'':'required'} minlength="10" autocomplete="new-password"><div class="hint">At least 10 characters, with letters and numbers.</div></div>
   <div class="field"><label>Status</label><select name="active"><option value="1">Active</option><option value="0" ${u&&!u.active?'selected':''}>Disabled</option></select></div>
   </div><div class="row" style="justify-content:flex-end"><button class="btn primary">Save user</button></div></form>`);
@@ -1418,13 +1620,13 @@ function sSettings(){
   <div class="field"><label>Contact email</label><input name="email" value="${esc(s.email)}"></div>
   <div class="field"><label>Office hours</label><input name="officeHours" value="${esc(s.officeHours)}"></div></div>
   <div class="field"><label>About the department (one paragraph per line)</label><textarea name="aboutText" rows="6">${esc(s.aboutText)}</textarea></div>
-  <h3>Aptitude test defaults</h3><div class="grid g2">
-  <div class="field"><label>Default venue</label><input name="defaultVenue" value="${esc(s.defaultVenue)}"></div>
-  <div class="field"><label>Default reporting time</label><input name="defaultTime" value="${esc(s.defaultTime)}"></div></div>
-  <h3>Notifications</h3><p class="small muted">Record the gateway details here. Sending needs the gateway’s API keys configured on the server (see README) — never put secret keys in this page.</p><div class="grid g3">
+  <h3>Applications and batches</h3>
+  <div class="field" style="max-width:260px"><label>Maximum trainees in one batch</label><input name="maxBatchSize" type="number" min="1" max="200" value="${esc(s.maxBatchSize||45)}"><div class="hint">A centre with a lower capacity takes fewer</div></div>
+  <div class="field"><label>Extra message in the application acknowledgement email</label><textarea name="ackEmailText" rows="3">${esc(s.ackEmailText)}</textarea><div class="hint">Sent with the application number when a student applies</div></div>
+  <div class="field"><label>Extra message in the selection email</label><textarea name="selectionEmailText" rows="3">${esc(s.selectionEmailText)}</textarea><div class="hint">Sent to every candidate the Joint Secretary approves</div></div>
+  <h3>Notifications</h3><p class="small muted">Email is sent through the mail server set in the server’s <code>.env</code> file (SMTP_HOST and related settings). Record the SMS gateway details here; its API keys also belong in <code>.env</code> — never put secret keys in this page.</p><div class="grid g2">
   <div class="field"><label>SMS sender ID (DLT header)</label><input name="smsSender" value="${esc(s.smsSender)}" placeholder="e.g. KAACSD"></div>
-  <div class="field"><label>SMS gateway name</label><input name="smsGateway" value="${esc(s.smsGateway)}" placeholder="Leave blank if not connected"></div>
-  <div class="field"><label>Email sender address</label><input name="emailFrom" value="${esc(s.emailFrom)}" placeholder="Leave blank if not connected"></div></div>
+  <div class="field"><label>SMS gateway name</label><input name="smsGateway" value="${esc(s.smsGateway)}" placeholder="Leave blank if not connected"></div></div>
   <h3>Fallback highlights</h3><div class="field"><label>Shown in the ticker only when no notices are published (one per line)</label><textarea name="notices" rows="4">${esc(s.notices)}</textarea></div>
   <button class="btn primary">Save settings</button></form>`;
 }
@@ -1438,7 +1640,12 @@ function saveFile(filename,data){
   const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),10000);
 }
-const csvCell=v=>`"${String(v??'').replace(/"/g,'""')}"`;
+// A leading = + - @ would make spreadsheet programs run the cell as a formula.
+const csvCell=v=>{let t=String(v??'');if(/^[=+\-@\t\r]/.test(t))t="'"+t;return `"${t.replace(/"/g,'""')}"`};
+function saveBlob(filename,blob){
+  const url=URL.createObjectURL(blob); const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),10000);
+}
 function exportCSV(){
   const cols=['id','name','father','dob','gender','category','mobile','email','village','district','qual','pref1','skillId','centreId','batchId','status','admitNo','certNo','createdAt'];
   const rows=[cols.join(',')].concat(myStudents().map(s=>cols.map(c=>csvCell(c==='status'?STATUS[s.status]?.[0]:s[c])).join(',')));
@@ -1534,7 +1741,7 @@ async function init(){
   LOAD_ERROR=''; render();
   try{await loadPublic()}
   catch(e){LOAD_ERROR=e.message;render();return}
-  try{const m=await api('me');if(m.me){ME=m.me;await loadStaff()}}catch(e){ME=null}
+  try{const m=await api('me');if(m.me){ME=m.me;await loadStaff()}else if(m.student){STU=m.student;await loadStudent()}}catch(e){ME=null;STU=null}
   LOADED=true; readHash();
 }
 init();

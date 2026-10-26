@@ -65,16 +65,92 @@ function store_docs(array $types, string $ownerType, string $ownerId, ?array $on
   return $docs;
 }
 
-/* ---------- Student registration ---------- */
+/* ---------- Student accounts (CR-01) ---------- */
 
-function h_register(array $in): array {
-  // Generous, because Common Service Centres and cyber cafés register many people from one connection.
+function check_new_student_password(string $pw): void {
+  if (strlen($pw) < 8 || !preg_match('/[A-Za-z]/', $pw) || !preg_match('/\d/', $pw)) fail('Use a password of at least 8 characters with letters and numbers.');
+}
+
+/** Creates a student account. This is not an application; the student applies for a trade afterwards. */
+function h_student_signup(array $in): array {
+  rate_check('signup:' . client_ip(), 60, 3600, 'Too many new accounts from this connection. Try again later.');
+  $name = str_in($in, 'name', 120);
+  $email = strtolower(str_in($in, 'email', 120));
+  $mobile = str_in($in, 'mobile', 10);
+  $pw = (string)($in['password'] ?? '');
+  if ($name === '') fail('Fill in your full name.');
+  if (!filter_var($email, FILTER_VALIDATE_EMAIL)) fail('Enter a valid email address. Your application number and updates are sent here.');
+  if (!preg_match('/^[6-9]\d{9}$/', $mobile)) fail('Enter a valid 10-digit mobile number starting with 6–9.');
+  check_new_student_password($pw);
+  if (val('SELECT 1 FROM applicants WHERE lower(email) = :e', [':e' => $email])) fail('An account with this email already exists. Log in, or use “Forgot password”.', 409);
+  rate_add('signup:' . client_ip());
+  $id = (int)val('INSERT INTO applicants(name, email, mobile, pw_hash) VALUES (:n, :e, :m, :h) RETURNING id',
+    [':n' => $name, ':e' => $email, ':m' => $mobile, ':h' => password_hash($pw, PASSWORD_DEFAULT)]);
+  queue_email('A' . $id, $email, 'SDE Dept, KAAC: your student account',
+    "Dear $name,\n\nYour student account on the Skill Development & Entrepreneurship portal has been created.\n"
+    . "Log in with this email address to choose a trade and apply.", 'account');
+  return ['me' => applicant_login($email, $pw)];
+}
+
+function h_student_login(array $in): array { return ['me' => applicant_login(str_in($in, 'email', 120), (string)($in['password'] ?? ''))]; }
+
+/** The student's dashboard: account details and every application they have made. */
+function h_student_me(array $in): array {
+  $a = applicant();
+  if (!$a) return ['me' => null];
+  $apps = all('SELECT * FROM students WHERE applicant_id = :a ORDER BY created_at DESC', [':a' => $a['id']]);
+  $batchIds = array_values(array_filter(array_column($apps, 'batch_id')));
+  $ids = array_column($apps, 'id');
+  return [
+    'me' => $a,
+    'students' => array_map(fn($r) => map_student($r, 'inline'), $apps),
+    'batches' => $batchIds ? load_batches('b.id = ANY(:ids)', [':ids' => to_pg_arr($batchIds)]) : [],
+    'ojt' => $ids ? array_map('map_ojt', all("SELECT * FROM ojt_letters WHERE student_id = ANY(:ids) AND status = 'signed'", [':ids' => to_pg_arr($ids)])) : [],
+  ];
+}
+
+function h_forgot_password(array $in): array {
+  rate_check('forgot:' . client_ip(), 10, 3600);
+  rate_add('forgot:' . client_ip());
+  $email = strtolower(str_in($in, 'email', 120));
+  $a = one('SELECT id, name, email FROM applicants WHERE lower(email) = :e AND active', [':e' => $email]);
+  if ($a) {
+    $token = bin2hex(random_bytes(24));
+    q("INSERT INTO password_resets(token_hash, applicant_id, expires_at) VALUES (:t, :a, now() + interval '1 hour')",
+      [':t' => hash('sha256', $token), ':a' => $a['id']]);
+    $base = rtrim((string)($in['base'] ?? ''), '/');
+    $link = (preg_match('#^https?://[^\s"<>]+$#', $base) ? $base : '') . '#reset/' . $token;
+    queue_email('A' . $a['id'], $a['email'], 'SDE Dept, KAAC: reset your password',
+      "Dear {$a['name']},\n\nOpen this link within one hour to set a new password:\n$link\n\nIf you did not ask for this, ignore this email.", 'password-reset');
+  }
+  // The same answer either way, so the form does not reveal which emails have accounts.
+  return ['ok' => true];
+}
+
+function h_reset_password(array $in): array {
+  rate_check('reset:' . client_ip(), 20, 3600);
+  rate_add('reset:' . client_ip());
+  $pw = (string)($in['password'] ?? '');
+  check_new_student_password($pw);
+  $email = tx(function () use ($in, $pw) {
+    $r = one("SELECT r.applicant_id, a.email FROM password_resets r JOIN applicants a ON a.id = r.applicant_id
+              WHERE r.token_hash = :t AND r.used_at IS NULL AND r.expires_at > now() FOR UPDATE OF r", [':t' => hash('sha256', (string)($in['token'] ?? ''))]);
+    if (!$r) fail('This link has expired or was already used. Ask for a new one.');
+    q('UPDATE applicants SET pw_hash = :h WHERE id = :id', [':h' => password_hash($pw, PASSWORD_DEFAULT), ':id' => $r['applicant_id']]);
+    q('UPDATE password_resets SET used_at = now() WHERE applicant_id = :id AND used_at IS NULL', [':id' => $r['applicant_id']]);
+    return $r['email'];
+  });
+  return ['me' => applicant_login($email, $pw)];
+}
+
+/* ---------- Application for a trade (CR-02) ---------- */
+
+function h_apply(array $in): array {
+  $acc = require_applicant();
   rate_check('register:' . client_ip(), 120, 3600, 'Too many applications from this connection. Try again later.');
   $p = [];
   $aadhaar = check_person_basics($in, $p);
-  $email = str_in($in, 'email', 120);
-  if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) $p[] = 'Enter a valid email address or leave it blank.';
-  foreach (['name' => 'full name', 'father' => 'father’s name', 'village' => 'village / town', 'category' => 'category', 'pref1' => 'first choice'] as $k => $label) {
+  foreach (['name' => 'full name', 'father' => 'father’s name', 'village' => 'village / town', 'category' => 'category', 'pref1' => 'trade'] as $k => $label) {
     if (str_in($in, $k) === '') $p[] = "Fill in $label.";
   }
   if (str_in($in, 'category') !== '' && !in_array(str_in($in, 'category'), ['ST (Hills)', 'ST (Plains)', 'SC', 'OBC/MOBC', 'General', 'EWS'], true)) $p[] = 'Choose a category from the list.';
@@ -83,37 +159,39 @@ function h_register(array $in): array {
   if ($p) fail(implode("\n", $p), 422);
 
   $pref1 = require_course(str_in($in, 'pref1'))['id'];
-  $pref2 = str_in($in, 'pref2') !== '' ? require_course(str_in($in, 'pref2'))['id'] : null;
   $prefCentre = optional_centre(str_in($in, 'prefCentre'));
   $hmac = aadhaar_hmac($aadhaar);
   $thumb = thumb_in($in);
+  $closed = "'" . implode("','", CLOSED_STATUSES) . "'";
 
   try {
-    $row = tx(function () use ($in, $aadhaar, $hmac, $pref1, $pref2, $prefCentre, $email, $thumb) {
-      $dup = one("SELECT id FROM students WHERE aadhaar_hmac = :h AND status NOT IN ('rejected','notselected','certified','failed')", [':h' => $hmac]);
-      if ($dup) fail("An active application ({$dup['id']}) already exists for this Aadhaar number. Use Track application to check it.", 409);
+    $row = tx(function () use ($in, $acc, $aadhaar, $hmac, $pref1, $prefCentre, $thumb, $closed) {
+      $open = one("SELECT id FROM students WHERE applicant_id = :a AND status NOT IN ($closed)", [':a' => $acc['id']]);
+      if ($open) fail("You already have an open application ({$open['id']}). You can apply again once it is closed.", 409);
+      $dup = one("SELECT id FROM students WHERE aadhaar_hmac = :h AND status NOT IN ($closed)", [':h' => $hmac]);
+      if ($dup) fail("An open application ({$dup['id']}) already exists for this Aadhaar number.", 409);
       $id = 'KAAC-SDE-' . year() . '-' . pad(next_number('student-' . year()));
       $docs = store_docs(STUDENT_DOCS, 'student', $id);
       $name = str_in($in, 'name', 120);
       $history = [['at' => now_iso(), 'by' => $name, 'role' => 'Applicant', 'action' => 'Application submitted', 'remark' => '']];
-      $row = one('INSERT INTO students(id, name, father, mother, dob, gender, category, pwd, aadhaar_last4, aadhaar_hmac, mobile, email, village, block,
-          district, pin, qual, board, pass_year, pct, pref1, pref2, pref_centre, photo_thumb, docs, history)
-        VALUES (:id,:name,:father,:mother,:dob,:gender,:category,:pwd,:l4,:hmac,:mobile,:email,:village,:block,:district,:pin,:qual,:board,:year,:pct,
-          :pref1,:pref2,:pc,:thumb,:docs,:history) RETURNING *', [
-        ':id' => $id, ':name' => $name, ':father' => str_in($in, 'father', 120), ':mother' => str_in($in, 'mother', 120),
+      $row = one('INSERT INTO students(id, applicant_id, name, father, mother, dob, gender, category, pwd, aadhaar_last4, aadhaar_hmac, mobile, email,
+          village, block, district, pin, qual, board, pass_year, pct, pref1, pref_centre, photo_thumb, docs, history)
+        VALUES (:id,:acc,:name,:father,:mother,:dob,:gender,:category,:pwd,:l4,:hmac,:mobile,:email,:village,:block,:district,:pin,:qual,:board,:year,:pct,
+          :pref1,:pc,:thumb,:docs,:history) RETURNING *', [
+        ':id' => $id, ':acc' => $acc['id'], ':name' => $name, ':father' => str_in($in, 'father', 120), ':mother' => str_in($in, 'mother', 120),
         ':dob' => str_in($in, 'dob', 10), ':gender' => str_in($in, 'gender'), ':category' => str_in($in, 'category'),
         ':pwd' => str_in($in, 'pwd') === 'Yes' ? 'Yes' : 'No', ':l4' => substr($aadhaar, -4), ':hmac' => $hmac,
-        ':mobile' => str_in($in, 'mobile', 10), ':email' => $email, ':village' => str_in($in, 'village', 120), ':block' => str_in($in, 'block', 120),
+        ':mobile' => str_in($in, 'mobile', 10), ':email' => $acc['email'], ':village' => str_in($in, 'village', 120), ':block' => str_in($in, 'block', 120),
         ':district' => str_in($in, 'district'), ':pin' => str_in($in, 'pin', 6), ':qual' => str_in($in, 'qual'), ':board' => str_in($in, 'board', 120),
-        ':year' => str_in($in, 'year', 4), ':pct' => str_in($in, 'pct', 20), ':pref1' => $pref1, ':pref2' => $pref2, ':pc' => $prefCentre,
+        ':year' => str_in($in, 'year', 4), ':pct' => str_in($in, 'pct', 20), ':pref1' => $pref1, ':pc' => $prefCentre,
         ':thumb' => $thumb, ':docs' => json_encode($docs, JSON_UNESCAPED_UNICODE), ':history' => json_encode($history, JSON_UNESCAPED_UNICODE),
       ]);
-      notify(map_student($row), 'submitted');
+      notify(map_student($row), 'submitted', ['subject' => "Application $id received"]);
       return $row;
     });
   } catch (Throwable $e) {
     discard_new_files();
-    if ($e instanceof PDOException && $e->getCode() === '23505') fail('An active application already exists for this Aadhaar number. Use Track application to check it.', 409);
+    if ($e instanceof PDOException && $e->getCode() === '23505') fail('An open application already exists for this account or Aadhaar number.', 409);
     throw $e;
   }
   rate_add('register:' . client_ip());
@@ -223,7 +301,10 @@ function h_track(array $in): array {
 
 /** Re-upload of documents after an application was returned for correction. */
 function h_resubmit(array $in): array {
-  [$kind, $found] = find_by_id_dob($in);
+  // A logged-in student resubmits their own application; anyone else needs the ID and date of birth.
+  $acc = applicant();
+  $own = $acc ? one('SELECT * FROM students WHERE id = :id AND applicant_id = :a', [':id' => strtoupper(str_in($in, 'id', 60)), ':a' => $acc['id']]) : null;
+  [$kind, $found] = $own ? ['student', $own] : find_by_id_dob($in);
   $types = $kind === 'trainer' ? TRAINER_DOCS : STUDENT_DOCS;
   try {
     $row = tx(function () use ($kind, $found, $types, $in) {
@@ -279,14 +360,20 @@ function h_doc(array $in): never {
   send_file(storage_dir() . '/' . $d['path'], $d['mime'], $d['name'], !empty($in['download']));
 }
 
+/** Whether an officer may open a person's documents or photo. Follows the same limits as the lists they see. */
 function staff_may_see_owner(array $me, string $type, string $id): bool {
+  $centre = $me['centreId'];
   if ($type === 'student') {
-    if ($me['role'] !== 'centre') return true;
-    return (bool)val('SELECT 1 FROM students WHERE id = :id AND centre_id = :c', [':id' => $id, ':c' => $me['centreId']]);
+    return match ($me['role']) {
+      'centre' => (bool)val("SELECT 1 FROM students WHERE id = :id AND (status = 'approved' OR " . ($centre !== '' ? 'centre_id = :c' : 'centre_id IS NOT NULL') . ')',
+        $centre !== '' ? [':id' => $id, ':c' => $centre] : [':id' => $id]),
+      'training' => (bool)val('SELECT 1 FROM students WHERE id = :id AND batch_id IS NOT NULL', [':id' => $id]),
+      default => true,
+    };
   }
   if ($type === 'trainer') {
-    if ($me['role'] !== 'centre') return true;
-    return (bool)val('SELECT 1 FROM batches WHERE trainer_id = :id AND centre_id = :c', [':id' => $id, ':c' => $me['centreId']]);
+    if ($me['role'] !== 'centre' || $centre === '') return true;
+    return (bool)val('SELECT 1 FROM batches WHERE trainer_id = :id AND centre_id = :c', [':id' => $id, ':c' => $centre]);
   }
   return false;
 }

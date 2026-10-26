@@ -57,12 +57,14 @@ function login(string $username, string $password): array {
     q('UPDATE users SET pw_hash = :h WHERE id = :id', [':h' => password_hash($password, PASSWORD_DEFAULT), ':id' => $u['id']]);
   }
   session_regenerate_id(true);
+  unset($_SESSION['aid']);  // one kind of session at a time
   $_SESSION['uid'] = $u['id'];
   q('UPDATE users SET last_login = now() WHERE id = :id', [':id' => $u['id']]);
   audit('login', $u['id']);
   return me();
 }
 
+/** Ends a staff or student session. */
 function logout(): void {
   if (isset($_SESSION['uid'])) audit('logout', $_SESSION['uid']);
   $_SESSION = [];
@@ -72,4 +74,42 @@ function logout(): void {
 function check_password(string $uid, string $password): bool {
   $h = val('SELECT pw_hash FROM users WHERE id = :id AND active', [':id' => $uid]);
   return is_string($h) && password_verify($password, $h);
+}
+
+/* ---------- Student accounts (CR-01) ----------
+   Kept separate from staff sessions: a student session can never reach staff endpoints. */
+
+/** The logged-in student account, re-read on every request. */
+function applicant(): ?array {
+  static $cached = false;
+  if ($cached !== false) return $cached;
+  $aid = $_SESSION['aid'] ?? null;
+  $a = $aid ? one('SELECT id, name, email, mobile FROM applicants WHERE id = :id AND active', [':id' => $aid]) : null;
+  if ($aid && !$a) unset($_SESSION['aid']);
+  return $cached = $a ? ['id' => (int)$a['id'], 'name' => $a['name'], 'email' => $a['email'], 'mobile' => $a['mobile']] : null;
+}
+
+function require_applicant(): array {
+  $a = applicant();
+  if (!$a) fail('Please log in to your student account again.', 401);
+  return $a;
+}
+
+function applicant_login(string $email, string $password): array {
+  $email = strtolower(trim($email));
+  $ip = client_ip();
+  rate_check("slogin-ip:$ip", 30, 900);
+  rate_check("slogin-user:$email", 5, 900, 'Too many failed attempts for this account. Try again in 15 minutes.');
+  $a = one('SELECT id, pw_hash, active FROM applicants WHERE lower(email) = :e', [':e' => $email]);
+  $ok = password_verify($password, $a['pw_hash'] ?? '$2y$10$lL2nkvsyU9XmXzqZmfhrT.lfvqGTKBP7Bg4NbIE98GM5DZYaz3DBe');
+  if (!$a || !$ok || !$a['active']) {
+    rate_add("slogin-ip:$ip");
+    rate_add("slogin-user:$email");
+    fail('Email or password is incorrect.', 401);
+  }
+  session_regenerate_id(true);
+  unset($_SESSION['uid']);  // one kind of session at a time
+  $_SESSION['aid'] = (int)$a['id'];
+  q('UPDATE applicants SET last_login = now() WHERE id = :id', [':id' => $a['id']]);
+  return applicant();
 }

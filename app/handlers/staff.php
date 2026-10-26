@@ -5,17 +5,27 @@ declare(strict_types=1);
 
 function h_login(array $in): array { return ['me' => login(str_in($in, 'u', 60), (string)($in['p'] ?? ''))]; }
 function h_logout(array $in): array { logout(); return ['ok' => true]; }
-function h_me(array $in): array { return ['me' => me()]; }
+function h_me(array $in): array { return ['me' => me(), 'student' => applicant()]; }
 
-/** Everything an officer's screens need, limited to their centre for Centre Managers. */
+/**
+ * Everything an officer's screens need. Each role gets only the applications its stage deals with:
+ * Centre Managers see selected candidates (CR-07), Training Managers only candidates in batches (CR-08).
+ * A Centre Manager linked to one centre sees only that centre.
+ */
 function h_staff_data(array $in): array {
   $me = require_staff();
-  $centre = $me['role'] === 'centre' ? $me['centreId'] : null;
-  $sw = $centre ? 'WHERE centre_id = :c' : '';
+  $role = $me['role'];
+  $centre = $role === 'centre' && $me['centreId'] !== '' ? $me['centreId'] : null;
   $p = $centre ? [':c' => $centre] : [];
+  $studentWhere = match (true) {
+    $role === 'centre' && $centre !== null => "status = 'approved' OR centre_id = :c",
+    $role === 'centre' => "status IN ('approved','allocated','batched','training','passed','failed','certified')",
+    $role === 'training' => 'batch_id IS NOT NULL',
+    default => 'true',
+  };
   $out = [
     'me' => $me,
-    'students' => array_map('map_student', all("SELECT * FROM students $sw ORDER BY created_at DESC", $p)),
+    'students' => array_map('map_student', all("SELECT * FROM students WHERE $studentWhere ORDER BY created_at DESC", $p)),
     'batches' => $centre ? load_batches('b.centre_id = :c', $p) : load_batches(),
     'trainers' => array_map('map_trainer', all($centre
       ? 'SELECT * FROM trainers WHERE id IN (SELECT trainer_id FROM batches WHERE centre_id = :c) ORDER BY created_at DESC'
@@ -28,13 +38,20 @@ function h_staff_data(array $in): array {
     'sectors' => array_map('map_sector', all('SELECT * FROM sectors ORDER BY id')),
     'centres' => array_map('map_centre', all('SELECT * FROM centres ORDER BY id')),
     'ext' => ext_items(),
+    'maxBatchSize' => max_batch_size(),
   ];
-  if (can($me, 'monitoring')) $out['notifs'] = array_map('map_notif', all('SELECT * FROM notifications ORDER BY at DESC LIMIT 300'));
-  if ($me['role'] === 'admin') {
+  if (can($me, 'supervising')) $out['notifs'] = array_map('map_notif', all('SELECT * FROM notifications ORDER BY at DESC LIMIT 300'));
+  if ($role === 'admin') {
     $out['users'] = array_map('map_user', all('SELECT * FROM users ORDER BY role, id'));
     $out['settings'] = settings_all();
   }
   return $out;
+}
+
+/** Most trainees in one batch (CR-07): 45 unless the administrator changes it in Settings. */
+function max_batch_size(): int {
+  $n = (int)(settings_all()['maxBatchSize'] ?? 45);
+  return $n > 0 ? $n : 45;
 }
 
 /** Student IDs from a request, checked for format. */
@@ -44,47 +61,70 @@ function ids_in(array $in, string $key = 'ids'): array {
   return $ids;
 }
 
-/* ---------- Applications ---------- */
+/* ---------- Applications: verify, shortlist, approve (CR-03 to CR-05) ---------- */
+
+/** What each action needs: the role allowed, the status it starts from, the new status and the history text. */
+const APP_ACTIONS = [
+  'verify' => ['dealing', 'submitted', 'verified', 'Documents verified and forwarded to the S&M Officer'],
+  'return' => ['dealing', 'submitted', 'returned', 'Returned to the applicant for correction'],
+  'reject' => ['dealing', 'submitted', 'rejected', 'Application rejected'],
+  'shortlist' => ['supervising', 'verified', 'shortlisted', 'Shortlisted and forwarded to the Joint Secretary'],
+  'notshortlist' => ['supervising', 'verified', 'notshortlisted', 'Not shortlisted'],
+  'approve' => ['jts', 'shortlisted', 'approved', 'Approved by the Joint Secretary'],
+  'notapprove' => ['jts', 'shortlisted', 'notapproved', 'Not approved by the Joint Secretary'],
+];
+const REMARK_REQUIRED = ['return', 'reject', 'notshortlist', 'notapprove'];
+
+function app_action_on(array $s, string $act, string $remark): void {
+  [$role, $from, $to, $text] = APP_ACTIONS[$act];
+  require_staff($role);
+  need_status($s, $from);
+  $patch = [];
+  if ($act === 'verify') {
+    $docs = jd($s['docs'], []);
+    if (in_array('rejected', array_column($docs, 'status'), true)) fail('A document is marked incorrect. Return the application instead.');
+    $patch['docs'] = array_map(fn($d) => ['status' => 'ok'] + $d, $docs);
+  }
+  if ($act === 'approve') {
+    $patch['skill_id'] = $s['pref1'];
+    $patch['approved_at'] = now_iso();
+  }
+  set_student_status($s, $to, $text, $remark, $patch, 'same', $act === 'approve' ? ['subject' => 'You have been selected'] : []);
+}
 
 function h_app_action(array $in): array {
   $act = str_in($in, 'act');
   $remark = str_in($in, 'remark', 500);
-  if (in_array($act, ['reject', 'return', 'notselect'], true) && $remark === '') fail('Add a remark explaining the reason.');
-  tx(function () use ($in, $act, $remark) {
-    $s = student_row(str_in($in, 'id', 60));
-    $me = me();
-    $docs = jd($s['docs'], []);
-    $score = isset($in['score']) && $in['score'] !== '' && $in['score'] !== null ? (float)$in['score'] : null;
-    if ($score !== null && ($score < 0 || $score > 100)) fail('The aptitude score must be between 0 and 100.');
-    switch ($act) {
-      case 'verify':
-        require_staff('dealing'); need_status($s, 'submitted');
-        if (in_array('rejected', array_column($docs, 'status'), true)) fail('A document is marked incorrect. Return the application instead.');
-        set_student_status($s, 'verified', 'Documents verified', $remark, ['docs' => array_map(fn($d) => ['status' => 'ok'] + $d, $docs)]);
-        break;
-      case 'return':
-        require_staff('dealing'); need_status($s, 'submitted');
-        set_student_status($s, 'returned', 'Returned for correction', $remark);
-        break;
-      case 'reject':
-        if (!(can($me, 'dealing') && $s['status'] === 'submitted') && !(can($me, 'supervising') && $s['status'] === 'verified')) {
-          fail('This application cannot be rejected at its current stage by your role.', 403);
-        }
-        set_student_status($s, 'rejected', 'Application rejected', $remark);
-        break;
-      case 'select':
-        require_staff('training'); need_status($s, 'admit');
-        set_student_status($s, 'selected', 'Selected after aptitude test', $remark, ['score' => $score, 'skill_id' => $s['pref1']]);
-        break;
-      case 'notselect':
-        require_staff('training'); need_status($s, 'admit');
-        set_student_status($s, 'notselected', 'Not selected', $remark, ['score' => $score]);
-        break;
-      default:
-        fail('Unknown action.');
-    }
-  });
+  if (!isset(APP_ACTIONS[$act])) fail('Unknown action.');
+  if (in_array($act, REMARK_REQUIRED, true) && $remark === '') fail('Add a remark explaining the reason.');
+  tx(fn() => app_action_on(student_row(str_in($in, 'id', 60)), $act, $remark));
   return ['ok' => true];
+}
+
+/**
+ * The same action on many applications at once, e.g. the Joint Secretary approving a whole shortlist.
+ * Applications that have already moved on are skipped and counted.
+ */
+function h_bulk_action(array $in): array {
+  $act = str_in($in, 'act');
+  $remark = str_in($in, 'remark', 500);
+  if (!in_array($act, ['verify', 'shortlist', 'approve'], true)) fail('This action cannot be done in bulk.');
+  require_staff(APP_ACTIONS[$act][0]);
+  $ids = ids_in($in);
+  return tx(function () use ($ids, $act, $remark) {
+    $done = 0;
+    $skipped = [];
+    foreach ($ids as $id) {
+      $s = student_row($id);
+      if ($s['status'] !== APP_ACTIONS[$act][1] || ($act === 'verify' && in_array('rejected', array_column(jd($s['docs'], []), 'status'), true))) {
+        $skipped[] = $id;
+        continue;
+      }
+      app_action_on($s, $act, $remark);
+      $done++;
+    }
+    return ['done' => $done, 'skipped' => $skipped];
+  });
 }
 
 function need_status(array $row, string ...$allowed): void {
@@ -107,30 +147,35 @@ function h_mark_doc(array $in): array {
   return ['ok' => true];
 }
 
-function h_issue_admit(array $in): array {
-  $me = require_staff('supervising');
-  $ids = ids_in($in);
-  $date = str_in($in, 'date', 10);
-  $time = str_in($in, 'time', 40);
-  $venue = str_in($in, 'venue', 200);
-  if (!valid_date($date) || $date < today()) fail('Choose a test date from today onwards.');
-  if ($time === '' || $venue === '') fail('Fill in the reporting time and venue.');
-  $n = tx(function () use ($ids, $date, $time, $venue, $me) {
-    $n = 0;
-    foreach ($ids as $id) {
-      $s = student_row($id);
-      if ($s['status'] !== 'verified') continue;
-      $no = 'ADM-' . year() . '-' . pad(next_number('admit-' . year()));
-      set_student_status($s, 'admit', 'Admit card issued', 'Test on ' . fmt_d($date) . " at $venue",
-        ['admit_no' => $no, 'admit' => ['no' => $no, 'date' => $date, 'time' => $time, 'venue' => $venue, 'issuedAt' => now_iso(), 'by' => $me['name']]]);
-      $n++;
-    }
-    return $n;
-  });
-  return ['issued' => $n];
+/* ---------- Centre allocation and batches (CR-07) ---------- */
+
+function centre_row(string $id, ?array $me = null): array {
+  $c = one('SELECT * FROM centres WHERE id = :id AND active', [':id' => $id]);
+  if (!$c) fail('Choose a training centre.');
+  if ($me && $me['role'] === 'centre' && $me['centreId'] !== '' && $me['centreId'] !== $c['id']) fail('You manage a different centre.', 403);
+  return $c;
 }
 
-/* ---------- Batches ---------- */
+/** Allots selected candidates to a centre. Candidates not yet in a batch can be moved to another centre. */
+function h_allocate(array $in): array {
+  $me = require_staff('centre');
+  $ids = ids_in($in);
+  return tx(function () use ($in, $me, $ids) {
+    $c = centre_row(str_in($in, 'centre', 40), $me);
+    $sectors = pg_arr($c['sectors']);
+    $done = 0;
+    foreach ($ids as $id) {
+      $s = student_row($id);
+      need_status($s, 'approved', 'allocated');
+      if ($s['centre_id'] === $c['id']) continue;
+      $course = require_course($s['skill_id'], false);
+      if (!in_array($course['sector_id'], $sectors, true)) fail("{$c['name']} does not offer {$course['name']} ($id).");
+      set_student_status($s, 'allocated', "Allotted to {$c['name']} ({$c['id']})", '', ['centre_id' => $c['id']]);
+      $done++;
+    }
+    return ['done' => $done];
+  });
+}
 
 function trainer_clash(string $tid, string $start, string $end, ?string $except = null): ?array {
   return one("SELECT id, end_date FROM batches WHERE trainer_id = :t AND status <> 'completed' AND start_date <= :e AND :s <= end_date AND id <> :x LIMIT 1",
@@ -142,40 +187,34 @@ function eligible_trainer(string $tid, string $courseId): array {
   return $t;
 }
 
+/**
+ * Forms a batch of candidates allotted to one centre for one trade.
+ * Size is limited to the batch maximum (45) and to what the centre can hold.
+ */
 function h_create_batch(array $in): array {
-  $me = require_staff('training');
+  $me = require_staff('centre');
   $course = require_course(str_in($in, 'course', 40));
-  $centre = one('SELECT * FROM centres WHERE id = :id AND active', [':id' => str_in($in, 'centre', 40)]);
-  if (!$centre) fail('Choose a training centre.');
-  if (!in_array($course['sector_id'], pg_arr($centre['sectors']), true)) fail('This centre does not offer the course’s sector.');
-  $cap = (int)($in['cap'] ?? 0);
   $start = str_in($in, 'start', 10);
   $end = str_in($in, 'end', 10);
   $ids = ids_in($in);
-  if ($cap < 1 || $cap > 500) fail('Enter a capacity between 1 and 500.');
-  if (count($ids) > $cap) fail('You picked ' . count($ids) . " trainees but capacity is $cap.");
   if (!valid_date($start) || !valid_date($end) || $end <= $start) fail('End date must be after the start date.');
-  $tid = str_in($in, 'trainerId', 60);
+  if ($start < today()) fail('Choose a start date from today onwards.');
 
-  $id = tx(function () use ($me, $course, $centre, $cap, $start, $end, $ids, $tid) {
-    $trainer = null;
-    if ($tid !== '') {
-      $trainer = eligible_trainer($tid, $course['id']);
-      if ($c = trainer_clash($tid, $start, $end)) fail("The chosen trainer is busy with {$c['id']} on those dates. Pick another or assign later.");
-    }
+  $id = tx(function () use ($in, $me, $course, $start, $end, $ids) {
+    $centre = centre_row(str_in($in, 'centre', 40), $me);
+    $limit = min(max_batch_size(), (int)$centre['capacity']);
+    if ($limit < 1) fail("Set the capacity of {$centre['name']} in the centre master first.");
+    if (count($ids) > $limit) fail('A batch at ' . $centre['name'] . " can take at most $limit trainees. You picked " . count($ids) . '.');
     $code = preg_replace('/^SKL-/', '', $course['id']);
     $id = 'BAT-' . year() . '-' . $code . '-' . pad(next_number('batch-' . year() . '-' . $code), 3);
-    $log = $trainer ? [['at' => now_iso(), 'by' => $me['name'], 'trainerId' => $tid, 'action' => 'Trainer assigned']] : [];
-    q('INSERT INTO batches(id, course_id, centre_id, start_date, end_date, trainer_id, capacity, trainer_log, created_by)
-       VALUES (:id,:co,:ce,:s,:e,:t,:cap,:log,:by)', [':id' => $id, ':co' => $course['id'], ':ce' => $centre['id'], ':s' => $start, ':e' => $end,
-      ':t' => $trainer ? $tid : null, ':cap' => $cap, ':log' => json_encode($log, JSON_UNESCAPED_UNICODE), ':by' => $me['name']]);
-    $batch = ['id' => $id, 'courseId' => $course['id'], 'centreId' => $centre['id'], 'start' => $start, 'end' => $end];
-    if ($trainer) notify(map_trainer($trainer), 'assigned', ['batch' => $batch, 'subject' => 'Batch assignment']);
+    q('INSERT INTO batches(id, course_id, centre_id, start_date, end_date, capacity, created_by) VALUES (:id,:co,:ce,:s,:e,:cap,:by)',
+      [':id' => $id, ':co' => $course['id'], ':ce' => $centre['id'], ':s' => $start, ':e' => $end, ':cap' => $limit, ':by' => $me['name']]);
     foreach ($ids as $sid) {
       $s = student_row($sid);
-      if ($s['status'] !== 'selected' || $s['skill_id'] !== $course['id']) fail("$sid is not a selected candidate for this course.", 409);
-      set_student_status($s, 'batched', "Allotted to batch $id", "{$centre['name']} ({$centre['id']})",
-        ['batch_id' => $id, 'centre_id' => $centre['id'], 'skill_id' => $course['id']], 'same', ['batchStart' => $start]);
+      if ($s['status'] !== 'allocated' || $s['centre_id'] !== $centre['id'] || $s['skill_id'] !== $course['id']) {
+        fail("$sid is not a candidate allotted to this centre for this trade.", 409);
+      }
+      set_student_status($s, 'batched', "Placed in batch $id", "{$centre['name']} ({$centre['id']})", ['batch_id' => $id], 'same', ['batchStart' => $start]);
     }
     audit('batch:create', $id, ['students' => $ids]);
     return $id;
@@ -188,8 +227,9 @@ function batch_row(string $id): array {
   if (!$b) fail('Batch not found.', 404);
   return $b;
 }
+/** A Centre Manager linked to one centre may act only on that centre; one with no centre manages all. */
 function own_centre_only(array $me, array $batch): void {
-  if ($me['role'] === 'centre' && $batch['centre_id'] !== $me['centreId']) fail('This batch belongs to another centre.', 403);
+  if ($me['role'] === 'centre' && $me['centreId'] !== '' && $batch['centre_id'] !== $me['centreId']) fail('This batch belongs to another centre.', 403);
 }
 
 function h_start_batch(array $in): array {
@@ -356,7 +396,7 @@ function h_create_ojt(array $in): array {
   $id = tx(function () use ($me, $sid, $start, $duration, $f) {
     $s = student_row($sid, false);
     if ($s['status'] !== 'certified') fail('Only certified trainees can be recommended.');
-    if ($me['role'] === 'centre' && $s['centre_id'] !== $me['centreId']) fail('This trainee belongs to another centre.', 403);
+    if ($me['role'] === 'centre' && $me['centreId'] !== '' && $s['centre_id'] !== $me['centreId']) fail('This trainee belongs to another centre.', 403);
     $id = 'OJT' . bin2hex(random_bytes(5));
     $no = 'KAAC-SDE-OJT-' . year() . '-' . pad(next_number('ojt-' . year()));
     q('INSERT INTO ojt_letters(id, letter_no, student_id, employer, address, role, start_date, duration, requested_by, requested_role)
@@ -382,7 +422,7 @@ function h_sign_ojt(array $in): array {
     q("UPDATE ojt_letters SET status = 'signed', signed_at = :at, signed_by = :by, signed_by_id = :uid, sig_ref = :sig WHERE id = :id",
       [':at' => $at, ':by' => $me['name'], ':uid' => $me['id'], ':sig' => $sig, ':id' => $o['id']]);
     $s = student_row($o['student_id']);
-    notify(map_student($s), 'ojt', ['letterNo' => $o['letter_no'], 'employer' => $o['employer']]);
+    notify(map_student($s), 'ojt', ['letterNo' => $o['letter_no'], 'employer' => $o['employer'], 'subject' => 'Your OJT recommendation letter is ready']);
     $history = jd($s['history'], []);
     $history[] = ['at' => $at, 'by' => $me['name'], 'role' => ROLES[$me['role']], 'action' => 'OJT recommendation letter signed', 'remark' => "{$o['letter_no']} · {$o['employer']}"];
     q('UPDATE students SET history = :h, updated_at = now() WHERE id = :id', [':h' => json_encode($history, JSON_UNESCAPED_UNICODE), ':id' => $s['id']]);

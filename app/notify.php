@@ -17,21 +17,34 @@ function centre_name(?string $id): string {
 /** Message text for a student event, mirroring the wording staff see in the SMS log. */
 function student_message(array $s, string $key, array $x): ?string {
   $n = $s['name'];
+  $trade = course_name($s['skillId'] ?: $s['pref1']);
   return match ($key) {
-    'submitted' => "Dear $n, your application {$s['id']} for " . course_name($s['pref1']) . ' has been received by SDE Dept, KAAC. Track it on the portal with your date of birth.',
-    'returned' => "Dear $n, application {$s['id']} needs correction: " . ($x['remark'] ?: 'see portal') . '. Please re-upload documents on the portal.',
-    'verified' => "Dear $n, documents for application {$s['id']} have been verified. Your admit card will be issued shortly.",
-    'admit' => "Dear $n, admit card {$s['admit']['no']} is issued. Aptitude test on " . fmt_d($s['admit']['date']) . " at {$s['admit']['time']}, {$s['admit']['venue']}. Download it from the portal.",
-    'selected' => "Congratulations $n! You are selected for " . course_name($s['skillId'] ?: $s['pref1']) . '. Batch details will follow.',
-    'notselected' => "Dear $n, you were not selected for " . course_name($s['pref1']) . ' this session. You may apply again in the next session.',
-    'batched' => "Dear $n, you are allotted batch {$s['batchId']} (" . course_name($s['skillId']) . ') at ' . centre_name($s['centreId']) . " [{$s['centreId']}], starting " . fmt_d($x['batchStart'] ?? null) . '.',
-    'training' => "Dear $n, your training in batch {$s['batchId']} has started at " . centre_name($s['centreId']) . '.',
-    'passed' => "Dear $n, you have passed the assessment for " . course_name($s['skillId']) . '. Your certificate will be issued soon.',
-    'failed' => "Dear $n, you did not clear the assessment for " . course_name($s['skillId']) . '. Contact your centre for re-assessment.',
-    'certified' => "Dear $n, certificate {$s['cert']['no']} for " . course_name($s['skillId']) . ' is issued. Download it from the portal.',
+    'submitted' => "Dear $n, your application {$s['id']} for $trade has been received by SDE Dept, KAAC.",
+    'returned' => "Dear $n, application {$s['id']} needs correction: " . ($x['remark'] ?: 'see portal') . '. Please log in and re-upload the documents.',
     'rejected' => "Dear $n, application {$s['id']} was not accepted. Reason: " . ($x['remark'] ?: 'see portal') . '.',
+    'verified' => "Dear $n, the documents for application {$s['id']} have been verified and the application is under review.",
+    'shortlisted' => "Dear $n, application {$s['id']} has been shortlisted and sent for final approval.",
+    'notshortlisted' => "Dear $n, application {$s['id']} was not shortlisted this session" . ($x['remark'] ? ": {$x['remark']}" : '') . '. You may apply again in the next session.',
+    'approved' => "Congratulations $n! You have been selected for training in $trade (application {$s['id']}).",
+    'notapproved' => "Dear $n, application {$s['id']} was not selected this session" . ($x['remark'] ? ": {$x['remark']}" : '') . '. You may apply again in the next session.',
+    'allocated' => "Dear $n, you have been allotted to " . centre_name($s['centreId']) . " [{$s['centreId']}] for training in $trade. Batch details will follow.",
+    'batched' => "Dear $n, you are allotted batch {$s['batchId']} ($trade) at " . centre_name($s['centreId']) . " [{$s['centreId']}], starting " . fmt_d($x['batchStart'] ?? null) . '.',
+    'training' => "Dear $n, your training in batch {$s['batchId']} has started at " . centre_name($s['centreId']) . '.',
+    'passed' => "Dear $n, you have passed the assessment for $trade. Your certificate will be issued soon.",
+    'failed' => "Dear $n, you did not clear the assessment for $trade. Contact your centre for re-assessment.",
+    'certified' => "Dear $n, certificate {$s['cert']['no']} for $trade is issued. Download it from the portal.",
     'ojt' => "Dear $n, your OJT recommendation letter {$x['letterNo']} for {$x['employer']} has been signed by the Joint Secretary. Download it from the portal.",
     default => null,
+  };
+}
+
+/** Extra paragraph the administrator sets in Settings, added to some emails (CR-02, CR-06). */
+function email_extra(string $key): string {
+  $st = settings_all();
+  return match ($key) {
+    'submitted' => trim($st['ackEmailText'] ?? ''),
+    'approved' => trim($st['selectionEmailText'] ?? ''),
+    default => '',
   };
 }
 
@@ -51,20 +64,27 @@ function trainer_message(array $t, string $key, array $x): ?string {
   };
 }
 
-/** Logs the SMS (and email, when the person gave one) for an event. $p is a mapped student or trainer. */
+/** Logs the SMS and queues the email (when the person gave one) for an event. $p is a mapped student or trainer. */
 function notify(array $p, string $key, array $x = []): void {
   $isTrainer = ($p['kind'] ?? '') === 'trainer';
   $body = $isTrainer ? trainer_message($p, $key, $x) : student_message($p, $key, $x);
   if ($body === null) return;
-  $st = settings_all();
-  $sms = !empty($st['smsGateway']) ? 'Queued for gateway' : 'Logged (no SMS gateway connected)';
-  $mail = !empty($st['emailFrom']) ? 'Queued for mail server' : 'Logged (no mail server connected)';
-  $ins = 'INSERT INTO notifications(ref_id, channel, to_addr, subject, body, status, event) VALUES (:r, :c, :t, :sub, :b, :st, :e)';
-  q($ins, [':r' => $p['id'], ':c' => 'SMS', ':t' => '+91 ' . $p['mobile'], ':sub' => '', ':b' => $body, ':st' => $sms, ':e' => $key]);
+  $sms = !empty(settings_all()['smsGateway']) ? 'Queued for gateway' : 'Logged (no SMS gateway connected)';
+  q('INSERT INTO notifications(ref_id, channel, to_addr, subject, body, status, event) VALUES (:r, :c, :t, :sub, :b, :st, :e)',
+    [':r' => $p['id'], ':c' => 'SMS', ':t' => '+91 ' . $p['mobile'], ':sub' => '', ':b' => $body, ':st' => $sms, ':e' => $key]);
   if (!empty($p['email'])) {
     $label = ($isTrainer ? TSTATUS_LABELS : STATUS_LABELS)[$key] ?? 'Update';
-    q($ins, [':r' => $p['id'], ':c' => 'Email', ':t' => $p['email'], ':sub' => 'SDE Dept, KAAC: ' . ($x['subject'] ?? $label), ':b' => $body, ':st' => $mail, ':e' => $key]);
+    $extra = $isTrainer ? '' : email_extra($key);
+    queue_email($p['id'], $p['email'], 'SDE Dept, KAAC: ' . ($x['subject'] ?? $label), $body . ($extra !== '' ? "\n\n$extra" : ''), $key);
   }
+}
+
+/** Queues an email for the mail worker, or just logs it when no mail server is configured. */
+function queue_email(string $refId, string $to, string $subject, string $body, string $event): void {
+  q('INSERT INTO notifications(ref_id, channel, to_addr, subject, body, status, event) VALUES (:r, :c, :t, :sub, :b, :st, :e)', [
+    ':r' => $refId, ':c' => 'Email', ':t' => $to, ':sub' => $subject, ':b' => $body,
+    ':st' => mail_configured() ? 'Queued' : 'Logged (no mail server configured)', ':e' => $event,
+  ]);
 }
 
 /* ---------- Status changes ---------- */
@@ -87,7 +107,7 @@ function history_entry(?array $me, string $action, string $remark, string $appli
 }
 
 /** Column => value updates allowed through set_student_status(). */
-const STUDENT_PATCH_COLS = ['status', 'skill_id', 'centre_id', 'batch_id', 'score', 'admit_no', 'admit', 'result', 'cert_no', 'cert', 'docs', 'photo_thumb'];
+const STUDENT_PATCH_COLS = ['status', 'skill_id', 'centre_id', 'batch_id', 'score', 'admit_no', 'admit', 'result', 'cert_no', 'cert', 'docs', 'photo_thumb', 'approved_at'];
 
 /**
  * Applies a status change to a student, appends to the history and logs the notification.

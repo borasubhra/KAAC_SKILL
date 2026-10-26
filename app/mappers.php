@@ -19,6 +19,7 @@ function map_centre(array $r): array {
   return [
     'id' => $r['id'], 'name' => $r['name'], 'address' => $r['address'], 'district' => $r['district'], 'sectors' => pg_arr($r['sectors']),
     'capacity' => (int)$r['capacity'], 'phone' => $r['phone'], 'active' => (bool)$r['active'],
+    'type' => $r['centre_type'], 'hod' => $r['hod'], 'nearbyTown' => $r['nearby_town'], 'facilities' => $r['facilities'],
   ];
 }
 

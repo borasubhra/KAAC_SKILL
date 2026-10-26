@@ -10,13 +10,14 @@ require __DIR__ . '/handlers/admin.php';
 
 const ROUTES = [
   'GET' => [
-    'public' => 'h_public', 'me' => 'h_me', 'verify' => 'h_verify', 'doc' => 'h_doc', 'photo' => 'h_photo',
+    'public' => 'h_public', 'me' => 'h_me', 'student_me' => 'h_student_me', 'verify' => 'h_verify', 'doc' => 'h_doc', 'photo' => 'h_photo',
     'staff_data' => 'h_staff_data', 'student' => 'h_student',
   ],
   'POST' => [
-    'login' => 'h_login', 'logout' => 'h_logout', 'register' => 'h_register', 'trainer_register' => 'h_trainer_register',
-    'track' => 'h_track', 'resubmit' => 'h_resubmit',
-    'app_action' => 'h_app_action', 'mark_doc' => 'h_mark_doc', 'issue_admit' => 'h_issue_admit',
+    'login' => 'h_login', 'logout' => 'h_logout', 'trainer_register' => 'h_trainer_register',
+    'student_signup' => 'h_student_signup', 'student_login' => 'h_student_login', 'forgot_password' => 'h_forgot_password',
+    'reset_password' => 'h_reset_password', 'apply' => 'h_apply', 'track' => 'h_track', 'resubmit' => 'h_resubmit',
+    'app_action' => 'h_app_action', 'bulk_action' => 'h_bulk_action', 'mark_doc' => 'h_mark_doc', 'allocate' => 'h_allocate',
     'create_batch' => 'h_create_batch', 'start_batch' => 'h_start_batch', 'assign_trainer' => 'h_assign_trainer',
     'unassign_trainer' => 'h_unassign_trainer', 'trainer_action' => 'h_trainer_action', 'save_results' => 'h_save_results',
     'issue_certs' => 'h_issue_certs', 'create_ojt' => 'h_create_ojt', 'sign_ojt' => 'h_sign_ojt',

@@ -39,9 +39,10 @@ tx(function () use ($seed) {
           ':mina' => $c['minAge'], ':maxa' => $c['maxAge'], ':seats' => $c['seats']]);
     }
     foreach ($seed['centres'] as $c) {
-      q('INSERT INTO centres(id, name, address, district, sectors, capacity, phone, active) VALUES (:id,:n,:a,:d,:s,:c,:p,true)',
+      q('INSERT INTO centres(id, name, address, district, sectors, capacity, phone, active, centre_type, hod, nearby_town, facilities)
+         VALUES (:id,:n,:a,:d,:s,:c,:p,true,:t,:h,:town,:f)',
         [':id' => $c['id'], ':n' => $c['name'], ':a' => $c['address'], ':d' => $c['district'], ':s' => to_pg_arr($c['sectors']),
-          ':c' => $c['capacity'], ':p' => $c['phone']]);
+          ':c' => $c['capacity'], ':p' => $c['phone'], ':t' => $c['type'], ':h' => $c['hod'], ':town' => $c['nearbyTown'], ':f' => $c['facilities']]);
     }
     q("INSERT INTO notices(id, title, category, notice_date, body, created_by) VALUES ('NT-welcome', :t, 'Admission', CURRENT_DATE, :b, 'System')", [
       ':t' => 'Registration open for skill training courses, session ' . year(),
@@ -52,6 +53,8 @@ tx(function () use ($seed) {
   $settings = $seed['settings'];
   unset($settings['id']);
   q("INSERT INTO settings(id, data) VALUES ('main', :d) ON CONFLICT (id) DO NOTHING", [':d' => json_encode($settings, JSON_UNESCAPED_UNICODE)]);
+  // Settings added in later versions are filled in without touching values the administrator has changed.
+  q("UPDATE settings SET data = :d::jsonb || data WHERE id = 'main'", [':d' => json_encode($settings, JSON_UNESCAPED_UNICODE)]);
 
   if (!val('SELECT 1 FROM users LIMIT 1')) {
     $adminPw = env('ADMIN_PASSWORD', '');

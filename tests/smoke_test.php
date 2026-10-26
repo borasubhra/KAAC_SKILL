@@ -1,5 +1,6 @@
 <?php
-// End-to-end check of the API: one application from registration to signed OJT letter, plus permission checks.
+// End-to-end check of the API: one application from student sign-up to signed OJT letter, following the
+// CR-01 to CR-10 workflow, plus permission checks.
 // Needs a fresh database with DEMO_USERS=true. Usage: php tests/smoke_test.php [base URL, default http://localhost:8080]
 declare(strict_types=1);
 
@@ -59,99 +60,141 @@ check('public data loads', $r['code'] === 200 && count($r['json']['courses']) > 
 check('public data has no applicants', !isset($r['json']['students']) && !isset($r['json']['trainers']));
 check('POST without X-KAAC header is blocked', req('anon', 'POST', 'track', ['id' => 'x', 'dob' => '2000-01-01'], false, [])['code'] === 403);
 
-echo "Student registration\n";
+echo "Student account (CR-01)\n";
+$email = 'student' . getmypid() . '@example.com';
+check('applying needs a student account', req('anon', 'POST', 'apply', ['pref1' => 'SKL-IT-01'], true)['code'] === 401);
+check('weak student passwords are refused', req('stu', 'POST', 'student_signup', ['name' => 'Test Student', 'email' => $email, 'mobile' => '9876543210', 'password' => 'short'])['code'] === 400);
+$r = req('stu', 'POST', 'student_signup', ['name' => 'Test Student', 'email' => $email, 'mobile' => '9876543210', 'password' => 'Stud3ntPass']);
+check('student creates an account and is logged in', $r['code'] === 200 && $r['json']['me']['email'] === $email, $r['json']);
+check('the same email cannot sign up twice', req('anon', 'POST', 'student_signup', ['name' => 'X', 'email' => strtoupper($email), 'mobile' => '9876543210', 'password' => 'Stud3ntPass'])['code'] === 409);
+$r = req('stu', 'GET', 'student_me');
+check('dashboard shows no applications yet', $r['code'] === 200 && $r['json']['students'] === []);
+check('a student session cannot reach staff data', req('stu', 'GET', 'staff_data')['code'] === 401);
+check('student logs out and back in', req('stu', 'POST', 'logout')['code'] === 200 && req('stu', 'POST', 'student_login', ['email' => $email, 'password' => 'Stud3ntPass'])['code'] === 200);
+
+echo "Application (CR-02)\n";
 $aad = aadhaar();
-$form = ['aadhaar' => $aad, 'mobile' => '9876543210', 'email' => 'student@example.com', 'name' => 'Test Student', 'father' => 'Test Father',
+$form = ['aadhaar' => $aad, 'mobile' => '9876543210', 'name' => 'Test Student', 'father' => 'Test Father',
   'dob' => '2000-05-10', 'gender' => 'Female', 'category' => 'ST (Hills)', 'village' => 'Diphu', 'district' => 'Karbi Anglong', 'pin' => '782460',
   'qual' => 'Class 12', 'pref1' => 'SKL-IT-01', 'prefCentre' => 'KAAC-C-001', 'declare' => '1', 'photo_thumb' => $thumb,
   'doc_photo' => $jpg(), 'doc_aadhaar' => $pdf(), 'doc_edu' => $jpg(), 'doc_prc' => $jpg()];
 $bad = $form; $bad['doc_edu'] = new CURLFile("$TMP/evil.jpg", 'image/jpeg', 'evil.jpg');
-$r = req('anon', 'POST', 'register', $bad, true);
-check('a fake image is refused', $r['code'] === 400, $r['json']);
+check('a fake image is refused', req('stu', 'POST', 'apply', $bad, true)['code'] === 400);
 $bad = $form; $bad['aadhaar'] = '234567890123';
-check('an invalid Aadhaar number is refused', req('anon', 'POST', 'register', $bad, true)['code'] === 422);
-$r = req('anon', 'POST', 'register', $form, true);
-check('registration succeeds', $r['code'] === 200 && preg_match('/^KAAC-SDE-\d{4}-\d{5}$/', $r['json']['student']['id'] ?? ''), $r['json']);
+check('an invalid Aadhaar number is refused', req('stu', 'POST', 'apply', $bad, true)['code'] === 422);
+$r = req('stu', 'POST', 'apply', $form, true);
+check('application is submitted', $r['code'] === 200 && preg_match('/^KAAC-SDE-\d{4}-\d{5}$/', $r['json']['student']['id'] ?? ''), $r['json']);
 $sid = $r['json']['student']['id'] ?? '';
-check('registration returns no Aadhaar hash', !str_contains($r['body'], 'hmac') && !str_contains($r['body'], $aad));
-$form2 = $form; $form2['doc_photo'] = $jpg(); $form2['doc_aadhaar'] = $pdf(); $form2['doc_edu'] = $jpg(); $form2['doc_prc'] = $jpg();
-check('a second open application for the same Aadhaar is refused', req('anon', 'POST', 'register', $form2, true)['code'] === 409);
+check('the application uses the account email', ($r['json']['student']['email'] ?? '') === $email);
+check('no Aadhaar number or hash is returned', !str_contains($r['body'], 'hmac') && !str_contains($r['body'], $aad));
+$form2 = $form; foreach (['photo' => $jpg, 'aadhaar' => $pdf, 'edu' => $jpg, 'prc' => $jpg] as $k => $f) $form2["doc_$k"] = $f();
+$form2['aadhaar'] = aadhaar();
+check('a second open application from the same account is refused', req('stu', 'POST', 'apply', $form2, true)['code'] === 409);
+$r = req('stu', 'GET', 'student_me');
+check('dashboard lists the application', count($r['json']['students']) === 1 && $r['json']['students'][0]['status'] === 'submitted');
+check('ID + date of birth tracking still works', req('anon', 'POST', 'track', ['id' => $sid, 'dob' => '2000-05-10'])['json']['student']['status'] === 'submitted');
 
-echo "Tracking\n";
-check('wrong date of birth finds nothing', req('anon', 'POST', 'track', ['id' => $sid, 'dob' => '2000-05-11'])['code'] === 404);
-$r = req('anon', 'POST', 'track', ['id' => $sid, 'dob' => '2000-05-10']);
-check('ID + date of birth shows the application', $r['code'] === 200 && $r['json']['student']['status'] === 'submitted');
-check('tracked application includes the photo', str_starts_with($r['json']['student']['photo'] ?? '', 'data:image/jpeg'));
+// A second applicant, used for the "not approved" path and the batch-size rule.
+req('stu2', 'POST', 'student_signup', ['name' => 'Second Student', 'email' => "two$email", 'mobile' => '9876500000', 'password' => 'Stud3ntPass']);
+$form3 = $form; foreach (['photo' => $jpg, 'aadhaar' => $pdf, 'edu' => $jpg, 'prc' => $jpg] as $k => $f) $form3["doc_$k"] = $f();
+$form3['aadhaar'] = aadhaar(); $form3['name'] = 'Second Student';
+$sid2 = req('stu2', 'POST', 'apply', $form3, true)['json']['student']['id'] ?? '';
+check('second applicant applies', $sid2 !== '');
 
-echo "Staff login and permissions\n";
+echo "Acknowledgement email (CR-02)\n";
+req('sm', 'POST', 'login', ['u' => 'supervising', 'p' => 'Super@123']);
+$notifs = req('sm', 'GET', 'staff_data')['json']['notifs'] ?? [];
+$ack = array_values(array_filter($notifs, fn($n) => $n['channel'] === 'Email' && $n['studentId'] === $sid && $n['event'] === 'submitted'))[0] ?? null;
+check('acknowledgement email carries the application number', $ack && str_contains($ack['body'], $sid) && str_contains($ack['subject'], $sid), $ack);
+
+echo "Dealing Assistant (CR-03)\n";
 check('staff data needs login', req('anon', 'GET', 'staff_data')['code'] === 401);
 check('wrong password is refused', req('dealing', 'POST', 'login', ['u' => 'dealing', 'p' => 'nope'])['code'] === 401);
 $r = req('dealing', 'POST', 'login', ['u' => 'dealing', 'p' => 'Deal@123']);
-check('dealing officer logs in', $r['code'] === 200 && $r['json']['me']['role'] === 'dealing', $r['json']);
+check('Dealing Assistant logs in', $r['code'] === 200 && $r['json']['me']['role'] === 'dealing', $r['json']);
 check('session cookie is HttpOnly and SameSite=Strict', (bool)preg_match('/Set-Cookie: kaac_sess=[^\r\n]*HttpOnly[^\r\n]*SameSite=Strict/i', $r['headers']));
 $r = req('dealing', 'GET', 'staff_data');
 $st = array_values(array_filter($r['json']['students'] ?? [], fn($s) => $s['id'] === $sid))[0] ?? null;
-check('dealing officer sees the application', $st !== null);
+check('Dealing Assistant sees the application', $st !== null);
 check('staff list sends a photo link, not the image', str_starts_with($st['photo'] ?? '', 'api.php?r=photo'));
-check('dealing officer does not get the user list', !isset($r['json']['users']));
+check('Dealing Assistant does not get the user list', !isset($r['json']['users']));
 $aadDoc = array_values(array_filter($st['docs'], fn($d) => $d['key'] === 'aadhaar'))[0];
-$r = req('anon', 'GET', 'doc', ['id' => $aadDoc['docId']]);
-check('documents are not public', $r['code'] === 401);
+check('documents are not public', req('anon', 'GET', 'doc', ['id' => $aadDoc['docId']])['code'] === 401);
 $r = req('dealing', 'GET', 'doc', ['id' => $aadDoc['docId']]);
-check('dealing officer can open a document', $r['code'] === 200 && str_starts_with($r['body'], '%PDF'));
-check('dealing officer cannot issue admit cards', req('dealing', 'POST', 'issue_admit', ['ids' => [$sid], 'date' => date('Y-m-d', strtotime('+7 days')), 'time' => '10 AM', 'venue' => 'Diphu'])['code'] === 403);
-
-echo "Return, resubmit, verify\n";
+check('Dealing Assistant opens a document', $r['code'] === 200 && str_starts_with($r['body'], '%PDF'));
 req('dealing', 'POST', 'mark_doc', ['kind' => 'student', 'id' => $sid, 'key' => 'aadhaar', 'status' => 'rejected']);
-check('verifying with an incorrect document is refused', req('dealing', 'POST', 'app_action', ['id' => $sid, 'act' => 'verify'])['code'] === 400);
+check('forwarding with an incorrect document is refused', req('dealing', 'POST', 'app_action', ['id' => $sid, 'act' => 'verify'])['code'] === 400);
 check('returning needs a remark', req('dealing', 'POST', 'app_action', ['id' => $sid, 'act' => 'return'])['code'] === 400);
-check('return for correction', req('dealing', 'POST', 'app_action', ['id' => $sid, 'act' => 'return', 'remark' => 'Aadhaar copy unclear'])['code'] === 200);
-$r = req('anon', 'POST', 'resubmit', ['id' => $sid, 'dob' => '2000-05-10', 'doc_aadhaar' => $pdf()], true);
-check('applicant resubmits the corrected document', $r['code'] === 200 && $r['json']['student']['status'] === 'submitted', $r['json']);
-check('verify documents', req('dealing', 'POST', 'app_action', ['id' => $sid, 'act' => 'verify'])['code'] === 200);
-check('a second verify is refused (already moved on)', req('dealing', 'POST', 'app_action', ['id' => $sid, 'act' => 'verify'])['code'] === 409);
+check('returned to applicant for re-upload', req('dealing', 'POST', 'app_action', ['id' => $sid, 'act' => 'return', 'remark' => 'Aadhaar copy unclear'])['code'] === 200);
+$r = req('stu', 'POST', 'resubmit', ['id' => $sid, 'doc_aadhaar' => $pdf()], true);
+check('student re-uploads from their account', $r['code'] === 200 && $r['json']['student']['status'] === 'submitted', $r['json']);
+check('another student cannot resubmit it', req('stu2', 'POST', 'resubmit', ['id' => $sid, 'doc_aadhaar' => $pdf()], true)['code'] === 404);
+check('S&M Officer cannot do the Dealing Assistant’s step', req('sm', 'POST', 'app_action', ['id' => $sid, 'act' => 'verify'])['code'] === 403);
+$r = req('dealing', 'POST', 'bulk_action', ['act' => 'verify', 'ids' => [$sid, $sid2]]);
+check('Dealing Assistant forwards both to the S&M Officer', $r['code'] === 200 && $r['json']['done'] === 2, $r['json']);
+check('a second forward is refused (already moved on)', req('dealing', 'POST', 'app_action', ['id' => $sid, 'act' => 'verify'])['code'] === 409);
 
-echo "Admit card and selection\n";
-req('supervising', 'POST', 'login', ['u' => 'supervising', 'p' => 'Super@123']);
-$r = req('supervising', 'POST', 'issue_admit', ['ids' => [$sid], 'date' => date('Y-m-d', strtotime('+7 days')), 'time' => '10:00 AM', 'venue' => 'Diphu Skill Centre']);
-check('supervising officer issues the admit card', $r['code'] === 200 && $r['json']['issued'] === 1, $r['json']);
-req('training', 'POST', 'login', ['u' => 'training', 'p' => 'Train@123']);
-check('training manager selects the candidate', req('training', 'POST', 'app_action', ['id' => $sid, 'act' => 'select', 'score' => 72])['code'] === 200);
+echo "S&M Officer shortlist (CR-04)\n";
+check('the old Monitoring Officer account no longer exists', req('anon', 'POST', 'login', ['u' => 'monitoring', 'p' => 'Monitor@123'])['code'] === 401);
+check('Joint Secretary cannot approve before shortlisting', req('jts', 'POST', 'login', ['u' => 'jtsecy', 'p' => 'Jts@123'])['code'] === 200
+  && req('jts', 'POST', 'app_action', ['id' => $sid, 'act' => 'approve'])['code'] === 409);
+$r = req('sm', 'POST', 'bulk_action', ['act' => 'shortlist', 'ids' => [$sid, $sid2]]);
+check('S&M Officer shortlists and forwards to the Joint Secretary', $r['code'] === 200 && $r['json']['done'] === 2, $r['json']);
 
-echo "Trainer registration and empanelment\n";
+echo "Joint Secretary approval (CR-05)\n";
+check('not approving needs a remark', req('jts', 'POST', 'app_action', ['id' => $sid2, 'act' => 'notapprove'])['code'] === 400);
+check('Joint Secretary does not approve one candidate', req('jts', 'POST', 'app_action', ['id' => $sid2, 'act' => 'notapprove', 'remark' => 'Seats filled'])['code'] === 200);
+$r = req('jts', 'POST', 'bulk_action', ['act' => 'approve', 'ids' => [$sid, $sid2]]);
+check('Joint Secretary approves the shortlist; finished ones are skipped', $r['code'] === 200 && $r['json']['done'] === 1 && $r['json']['skipped'] === [$sid2], $r['json']);
+$r = req('sm', 'GET', 'staff_data');
+$st = array_values(array_filter($r['json']['students'], fn($s) => $s['id'] === $sid))[0] ?? [];
+check('S&M Officer sees the approved status', ($st['status'] ?? '') === 'approved' && ($st['skillId'] ?? '') === 'SKL-IT-01');
+
+echo "Selection email (CR-06)\n";
+$sel = array_values(array_filter($r['json']['notifs'], fn($n) => $n['channel'] === 'Email' && $n['studentId'] === $sid && $n['event'] === 'approved'))[0] ?? null;
+check('a selection email is queued for the candidate', $sel && str_contains($sel['body'], 'selected'), $sel);
+
+echo "Centre Manager allocation and batches (CR-07)\n";
+req('centre', 'POST', 'login', ['u' => 'centre', 'p' => 'Centre@123']);
+$r = req('centre', 'GET', 'staff_data');
+$ids = array_column($r['json']['students'], 'id');
+check('Centre Manager sees the approved candidate', in_array($sid, $ids, true));
+check('Centre Manager does not see candidates still under review', !in_array($sid2, $ids, true));
+check('a centre without the trade is refused', req('centre', 'POST', 'allocate', ['ids' => [$sid], 'centre' => 'KAAC-C-003'])['code'] === 400);
+check('Centre Manager allots the candidate to Diphu', req('centre', 'POST', 'allocate', ['ids' => [$sid], 'centre' => 'KAAC-C-001'])['json']['done'] === 1);
+check('Centre Manager moves the candidate to Donka', req('centre', 'POST', 'allocate', ['ids' => [$sid], 'centre' => 'KAAC-C-005'])['json']['done'] === 1);
+$start = date('Y-m-d', strtotime('+14 days')); $end = date('Y-m-d', strtotime('+120 days'));
+$many = array_map(fn($i) => sprintf('KAAC-SDE-2026-%05d', 90000 + $i), range(1, 26));
+$r = req('centre', 'POST', 'create_batch', ['course' => 'SKL-IT-01', 'centre' => 'KAAC-C-005', 'start' => $start, 'end' => $end, 'ids' => $many]);
+check('a batch larger than the centre can hold (25) is refused', $r['code'] === 400 && str_contains($r['json']['error'] ?? '', '25'), $r['json']);
+check('a candidate allotted elsewhere cannot join the batch', req('centre', 'POST', 'create_batch', ['course' => 'SKL-IT-01', 'centre' => 'KAAC-C-001', 'start' => $start, 'end' => $end, 'ids' => [$sid]])['code'] === 409);
+$r = req('centre', 'POST', 'create_batch', ['course' => 'SKL-IT-01', 'centre' => 'KAAC-C-005', 'start' => $start, 'end' => $end, 'ids' => [$sid]]);
+check('Centre Manager forms the batch', $r['code'] === 200 && str_starts_with($r['json']['id'] ?? '', 'BAT-'), $r['json']);
+$bid = $r['json']['id'] ?? '';
+check('Training Manager cannot form batches any more', req('training', 'POST', 'login', ['u' => 'training', 'p' => 'Train@123'])['code'] === 200
+  && req('training', 'POST', 'create_batch', ['course' => 'SKL-IT-01', 'centre' => 'KAAC-C-005', 'start' => $start, 'end' => $end, 'ids' => [$sid]])['code'] === 403);
+
+echo "Trainer registration and Training Manager (CR-08)\n";
 $tform = ['aadhaar' => aadhaar(), 'mobile' => '9123456780', 'email' => 'trainer@example.com', 'name' => 'Test Trainer', 'father' => 'TF',
   'dob' => '1985-01-01', 'gender' => 'Male', 'address' => 'Diphu', 'district' => 'Karbi Anglong', 'pin' => '782460', 'qual' => 'Graduate',
-  'specialisation' => 'Computer applications', 'indExp' => '5', 'trnExp' => '3', 'skill[0]' => 'SKL-IT-01', 'pc[0]' => 'KAAC-C-001', 'declare' => '1',
+  'specialisation' => 'Computer applications', 'indExp' => '5', 'trnExp' => '3', 'skill[0]' => 'SKL-IT-01', 'pc[0]' => 'KAAC-C-005', 'declare' => '1',
   'photo_thumb' => $thumb, 'doc_photo' => $jpg(), 'doc_aadhaar' => $pdf(), 'doc_qual' => $pdf(), 'doc_exp' => $pdf()];
 $r = req('anon', 'POST', 'trainer_register', $tform, true);
 check('trainer registers', $r['code'] === 200 && str_starts_with($r['json']['trainer']['id'] ?? '', 'KAAC-SDE-TR-'), $r['json']);
 $tid = $r['json']['trainer']['id'] ?? '';
-check('trainer can track with ID + date of birth', req('anon', 'POST', 'track', ['id' => $tid, 'dob' => '1985-01-01'])['json']['kind'] === 'trainer');
-check('dealing officer verifies the trainer', req('dealing', 'POST', 'trainer_action', ['id' => $tid, 'act' => 'verify'])['code'] === 200);
-check('training manager empanels the trainer', req('training', 'POST', 'trainer_action', ['id' => $tid, 'act' => 'empanel'])['code'] === 200);
-
-echo "Batch, training and results\n";
-$start = date('Y-m-d', strtotime('+14 days')); $end = date('Y-m-d', strtotime('+120 days'));
-check('a centre without the course sector is refused', req('training', 'POST', 'create_batch', ['course' => 'SKL-IT-01', 'centre' => 'KAAC-C-003',
-  'cap' => 30, 'start' => $start, 'end' => $end, 'ids' => [$sid], 'trainerId' => $tid])['code'] === 400);
-$r = req('training', 'POST', 'create_batch', ['course' => 'SKL-IT-01', 'centre' => 'KAAC-C-001', 'cap' => 30, 'start' => $start, 'end' => $end, 'ids' => [$sid], 'trainerId' => $tid]);
-check('training manager forms a batch', $r['code'] === 200 && str_starts_with($r['json']['id'] ?? '', 'BAT-'), $r['json']);
-$bid = $r['json']['id'] ?? '';
-$r = req('training', 'POST', 'create_batch', ['course' => 'SKL-IT-01', 'centre' => 'KAAC-C-001', 'cap' => 30, 'start' => $start, 'end' => $end, 'ids' => [$sid]]);
-check('a student cannot be put in two batches', $r['code'] === 409, $r['json']);
-req('centre1', 'POST', 'login', ['u' => 'centre1', 'p' => 'Centre@123']);
-req('centre2', 'POST', 'login', ['u' => 'centre2', 'p' => 'Centre@123']);
-check('another centre cannot start the batch', req('centre2', 'POST', 'start_batch', ['id' => $bid])['code'] === 403);
-check('centre manager starts the batch', req('centre1', 'POST', 'start_batch', ['id' => $bid])['code'] === 200);
-$r = req('centre2', 'GET', 'staff_data');
-check('another centre does not see these trainees', !in_array($sid, array_column($r['json']['students'], 'id'), true));
-check('another centre cannot record results', req('centre2', 'POST', 'save_results', ['bid' => $bid, 'rows' => [['sid' => $sid, 'att' => 90, 'marks' => 80]]])['code'] === 403);
-check('centre manager records results', req('centre1', 'POST', 'save_results', ['bid' => $bid, 'rows' => [['sid' => $sid, 'att' => 90, 'marks' => 80]]])['code'] === 200);
+check('Dealing Assistant verifies the trainer', req('dealing', 'POST', 'trainer_action', ['id' => $tid, 'act' => 'verify'])['code'] === 200);
+check('Training Manager empanels the trainer', req('training', 'POST', 'trainer_action', ['id' => $tid, 'act' => 'empanel'])['code'] === 200);
+$r = req('training', 'GET', 'staff_data');
+check('Training Manager sees the batch', in_array($bid, array_column($r['json']['batches'], 'id'), true));
+check('Training Manager sees only candidates in batches', array_column($r['json']['students'], 'id') === [$sid]);
+check('Training Manager assigns the trainer', req('training', 'POST', 'assign_trainer', ['bid' => $bid, 'tid' => $tid])['code'] === 200);
+check('Centre Manager starts training', req('centre', 'POST', 'start_batch', ['id' => $bid])['code'] === 200);
+check('Centre Manager records results', req('centre', 'POST', 'save_results', ['bid' => $bid, 'rows' => [['sid' => $sid, 'att' => 90, 'marks' => 80]]])['code'] === 200);
 
 echo "Certificate and verification\n";
 $r = req('training', 'POST', 'issue_certs', ['ids' => [$sid]]);
-check('training manager generates the certificate', $r['code'] === 200 && $r['json']['issued'] === 1);
-$cert = req('anon', 'POST', 'track', ['id' => $sid, 'dob' => '2000-05-10'])['json']['student']['cert']['no'] ?? '';
+check('Training Manager generates the certificate', $r['code'] === 200 && $r['json']['issued'] === 1);
+$cert = req('stu', 'GET', 'student_me')['json']['students'][0]['cert']['no'] ?? '';
 $r = req('anon', 'GET', 'verify', ['no' => $cert]);
 check('employer verifies the certificate', $r['json']['valid'] === true && $r['json']['name'] === 'Test Student', $r['json']);
 check('an unknown certificate is not valid', req('anon', 'GET', 'verify', ['no' => 'KAAC-SDE-CERT-2026-99999'])['json']['valid'] === false);
@@ -160,30 +203,54 @@ echo "OJT letter\n";
 $r = req('training', 'POST', 'create_ojt', ['sid' => $sid, 'employer' => 'Example Ltd', 'address' => 'Guwahati', 'role' => 'Data entry trainee', 'start' => date('Y-m-d', strtotime('+30 days')), 'duration' => '3 months']);
 check('OJT letter is drafted', $r['code'] === 200, $r['json']);
 $oid = $r['json']['id'] ?? '';
-req('jtsecy', 'POST', 'login', ['u' => 'jtsecy', 'p' => 'Jts@123']);
-check('signing with a wrong password is refused', req('jtsecy', 'POST', 'sign_ojt', ['id' => $oid, 'password' => 'wrong'])['code'] === 400);
-check('training manager cannot sign', req('training', 'POST', 'sign_ojt', ['id' => $oid, 'password' => 'Train@123'])['code'] === 403);
-check('Joint Secretary signs', req('jtsecy', 'POST', 'sign_ojt', ['id' => $oid, 'password' => 'Jts@123'])['code'] === 200);
-$r = req('anon', 'POST', 'track', ['id' => $sid, 'dob' => '2000-05-10']);
-check('signed letter appears on Track status', count($r['json']['ojt']) === 1 && strlen($r['json']['ojt'][0]['sigRef']) === 20);
+check('signing with a wrong password is refused', req('jts', 'POST', 'sign_ojt', ['id' => $oid, 'password' => 'wrong'])['code'] === 400);
+check('Training Manager cannot sign', req('training', 'POST', 'sign_ojt', ['id' => $oid, 'password' => 'Train@123'])['code'] === 403);
+check('Joint Secretary signs', req('jts', 'POST', 'sign_ojt', ['id' => $oid, 'password' => 'Jts@123'])['code'] === 200);
+$r = req('stu', 'GET', 'student_me');
+check('signed letter appears on the student dashboard', count($r['json']['ojt']) === 1 && strlen($r['json']['ojt'][0]['sigRef']) === 20);
+$form4 = $form; foreach (['photo' => $jpg, 'aadhaar' => $pdf, 'edu' => $jpg, 'prc' => $jpg] as $k => $f) $form4["doc_$k"] = $f();
+$form4['pref1'] = 'SKL-IT-02';
+check('after certification the student may apply for another trade', req('stu', 'POST', 'apply', $form4, true)['code'] === 200);
 
-echo "Administration\n";
+echo "Password reset\n";
+req('anon', 'POST', 'forgot_password', ['email' => $email, 'base' => 'http://localhost:8080/']);
+$notifs = req('sm', 'GET', 'staff_data')['json']['notifs'] ?? [];
+$mail = array_values(array_filter($notifs, fn($n) => $n['event'] === 'password-reset'))[0] ?? null;
+preg_match('/#reset\/([0-9a-f]{48})/', $mail['body'] ?? '', $m);
+check('a reset link is emailed', !empty($m[1]), $mail);
+check('a bad token is refused', req('anon', 'POST', 'reset_password', ['token' => str_repeat('0', 48), 'password' => 'N3wPassword'])['code'] === 400);
+check('the reset link sets a new password', req('anon', 'POST', 'reset_password', ['token' => $m[1] ?? '', 'password' => 'N3wPassword'])['code'] === 200);
+check('the link works only once', req('anon', 'POST', 'reset_password', ['token' => $m[1] ?? '', 'password' => 'An0therPass'])['code'] === 400);
+check('student logs in with the new password', req('stu3', 'POST', 'student_login', ['email' => $email, 'password' => 'N3wPassword'])['code'] === 200);
+
+echo "Administration (CR-09, CR-10)\n";
 req('admin', 'POST', 'login', ['u' => 'admin', 'p' => 'Admin@123']);
+$centre = ['id' => 'KAAC-C-006', 'name' => 'Baithalangso Skill Centre', 'district' => 'West Karbi Anglong', 'address' => 'Baithalangso', 'phone' => '',
+  'capacity' => 30, 'active' => true, 'sectors' => ['IT', 'AGR'], 'type' => 'Government institute', 'hod' => '', 'nearbyTown' => 'Hamren', 'facilities' => 'Computer lab'];
+check('a Government institute needs a Head of Department', req('admin', 'POST', 'save_master', ['coll' => 'centres', 'isNew' => true, 'data' => $centre])['code'] === 400);
+$centre['hod'] = 'Principal, Baithalangso ITI';
+check('admin adds an upcoming centre', req('admin', 'POST', 'save_master', ['coll' => 'centres', 'isNew' => true, 'data' => $centre])['code'] === 200);
+$c6 = array_values(array_filter(req('anon', 'GET', 'public')['json']['centres'], fn($c) => $c['id'] === 'KAAC-C-006'))[0] ?? [];
+check('centre details are saved', ($c6['type'] ?? '') === 'Government institute' && ($c6['hod'] ?? '') === 'Principal, Baithalangso ITI' && ($c6['nearbyTown'] ?? '') === 'Hamren');
+check('the Monitoring role can no longer be given', req('admin', 'POST', 'save_user', ['isNew' => true, 'id' => 'mon2', 'name' => 'M', 'role' => 'monitoring', 'pw' => 'Str0ngPassword', 'active' => true])['code'] === 400);
 check('weak passwords are refused', req('admin', 'POST', 'save_user', ['isNew' => true, 'id' => 'newuser', 'name' => 'N', 'role' => 'dealing', 'pw' => 'short', 'active' => true])['code'] === 400);
 check('admin creates a user', req('admin', 'POST', 'save_user', ['isNew' => true, 'id' => 'newuser', 'name' => 'New User', 'role' => 'dealing', 'pw' => 'Str0ngPassword', 'active' => true])['code'] === 200);
 check('new user logs in', req('newuser', 'POST', 'login', ['u' => 'newuser', 'p' => 'Str0ngPassword'])['code'] === 200);
 req('admin', 'POST', 'save_user', ['id' => 'newuser', 'name' => 'New User', 'role' => 'dealing', 'active' => false]);
 check('a disabled user is logged out at once', req('newuser', 'GET', 'staff_data')['code'] === 401);
+check('admin creates a Centre Manager for one centre', req('admin', 'POST', 'save_user', ['isNew' => true, 'id' => 'hamren', 'name' => 'Hamren Manager', 'role' => 'centre', 'centreId' => 'KAAC-C-002', 'pw' => 'Str0ngPassword', 'active' => true])['code'] === 200);
+req('hamren', 'POST', 'login', ['u' => 'hamren', 'p' => 'Str0ngPassword']);
+check('a one-centre manager cannot form batches at another centre', req('hamren', 'POST', 'create_batch', ['course' => 'SKL-IT-01', 'centre' => 'KAAC-C-005', 'start' => $start, 'end' => $end, 'ids' => [$sid]])['code'] === 403);
 check('non-admin cannot manage users', req('training', 'POST', 'save_user', ['isNew' => true, 'id' => 'x2', 'name' => 'X', 'role' => 'admin', 'pw' => 'Str0ngPassword1', 'active' => true])['code'] === 403);
 $r = req('training', 'POST', 'save_notice', ['title' => 'Test notice', 'category' => 'Circular', 'date' => date('Y-m-d'), 'body' => 'Body', 'active' => '1', 'file' => $pdf()], true);
-check('training manager publishes a notice with attachment', $r['code'] === 200, $r['json']);
+check('Training Manager publishes a notice with attachment', $r['code'] === 200, $r['json']);
 $n = array_values(array_filter(req('anon', 'GET', 'public')['json']['notices'], fn($x) => $x['title'] === 'Test notice'))[0] ?? null;
 check('notice attachment is public', $n && req('anon', 'GET', 'doc', ['id' => $n['attachDocId']])['code'] === 200);
 check('javascript: links are refused', req('training', 'POST', 'save_ext', ['kind' => 'jobs', 'data' => ['title' => 'X', 'url' => 'javascript:alert(1)']])['code'] === 400);
 
 echo "Login rate limit\n";
-for ($i = 0; $i < 5; $i++) req('anon', 'POST', 'login', ['u' => 'monitoring', 'p' => 'wrong']);
-check('repeated wrong passwords lock the account for a while', req('anon', 'POST', 'login', ['u' => 'monitoring', 'p' => 'Monitor@123'])['code'] === 429);
+for ($i = 0; $i < 5; $i++) req('anon', 'POST', 'login', ['u' => 'supervising', 'p' => 'wrong']);
+check('repeated wrong passwords lock the account for a while', req('anon', 'POST', 'login', ['u' => 'supervising', 'p' => 'Super@123'])['code'] === 429);
 
 array_map('unlink', glob("$TMP/*")); @rmdir($TMP);
 echo $failures ? "\n$failures check(s) failed.\n" : "\nAll checks passed.\n";

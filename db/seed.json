@@ -312,9 +312,13 @@
         "HLT",
         "BWS"
       ],
-      "capacity": 240,
+      "capacity": 45,
       "phone": "",
-      "active": true
+      "active": true,
+      "type": "Government institute",
+      "hod": "Principal, ITI Diphu",
+      "nearbyTown": "Diphu",
+      "facilities": "Computer lab (30 systems), 2 classrooms, hostel for women"
     },
     {
       "id": "KAAC-C-002",
@@ -327,9 +331,13 @@
         "AGR",
         "APP"
       ],
-      "capacity": 180,
+      "capacity": 40,
       "phone": "",
-      "active": true
+      "active": true,
+      "type": "Government institute",
+      "hod": "Head of Department, Hamren Polytechnic",
+      "nearbyTown": "Hamren",
+      "facilities": "Computer lab, workshop, agriculture demonstration plot"
     },
     {
       "id": "KAAC-C-003",
@@ -342,9 +350,13 @@
         "ELE",
         "HOS"
       ],
-      "capacity": 160,
+      "capacity": 30,
       "phone": "",
-      "active": true
+      "active": true,
+      "type": "Private",
+      "hod": "",
+      "nearbyTown": "Bokajan",
+      "facilities": "Automobile workshop, electrical lab"
     },
     {
       "id": "KAAC-C-004",
@@ -357,9 +369,13 @@
         "TOU",
         "BWS"
       ],
-      "capacity": 150,
+      "capacity": 35,
       "phone": "",
-      "active": true
+      "active": true,
+      "type": "Private",
+      "hod": "",
+      "nearbyTown": "Howraghat",
+      "facilities": "Handloom shed with 20 looms, classroom"
     },
     {
       "id": "KAAC-C-005",
@@ -371,9 +387,13 @@
         "ELE",
         "HLT"
       ],
-      "capacity": 140,
+      "capacity": 25,
       "phone": "",
-      "active": true
+      "active": true,
+      "type": "Government institute",
+      "hod": "Head of Department, Donka College",
+      "nearbyTown": "Kheroni",
+      "facilities": "Computer lab, nursing skills lab"
     }
   ],
   "settings": {
@@ -392,8 +412,10 @@
     "aboutText": "The Skill Development & Entrepreneurship Department of the Karbi Anglong Autonomous Council works to give the youth of Karbi Anglong and West Karbi Anglong the skills they need for jobs and self-employment.\nThe department runs free, short-term training courses in sectors such as IT, hospitality, healthcare, construction, agriculture and traditional handloom, through skill centres across the two districts. Training follows national skill standards (NSQF), and every trainee who passes the final assessment receives a certificate that employers can verify online.\nAfter certification, the department helps trainees take the next step through on-the-job training with employers and support for starting their own small enterprises.",
     "smsSender": "",
     "smsGateway": "",
-    "emailFrom": "",
-    "notices": "Registration is open for all courses for the current session.\nCarry the printed admit card and original Aadhaar to the aptitude test."
+    "notices": "Registration is open for all courses for the current session.\nCarry the printed admit card and original Aadhaar to the aptitude test.",
+    "maxBatchSize": "45",
+    "ackEmailText": "Keep your application number safe. You can follow your application on the portal after logging in. Please check your email regularly for updates.",
+    "selectionEmailText": "Your centre and batch will be informed shortly. Keep your original documents ready for verification when you report to the centre."
   },
   "demoUsers": [
     {
@@ -418,10 +440,17 @@
       "centreId": ""
     },
     {
-      "id": "monitoring",
-      "pw": "Monitor@123",
-      "name": "Ramesh Timung",
-      "role": "monitoring",
+      "id": "jtsecy",
+      "pw": "Jts@123",
+      "name": "Dr. Bidyut Terang",
+      "role": "jts",
+      "centreId": ""
+    },
+    {
+      "id": "centre",
+      "pw": "Centre@123",
+      "name": "Lily Hanse",
+      "role": "centre",
       "centreId": ""
     },
     {
@@ -430,27 +459,6 @@
       "name": "Joseph Rongpi",
       "role": "training",
       "centreId": ""
-    },
-    {
-      "id": "jtsecy",
-      "pw": "Jts@123",
-      "name": "Dr. Bidyut Terang",
-      "role": "jts",
-      "centreId": ""
-    },
-    {
-      "id": "centre1",
-      "pw": "Centre@123",
-      "name": "Lily Hanse",
-      "role": "centre",
-      "centreId": "KAAC-C-001"
-    },
-    {
-      "id": "centre2",
-      "pw": "Centre@123",
-      "name": "Sarbajit Engti",
-      "role": "centre",
-      "centreId": "KAAC-C-002"
     }
   ]
 }
