@@ -715,4 +715,5 @@ body.is-home .lt-navrow{box-shadow:0 3px 0 var(--saffron)}
 @keyframes cemSwing{0%,100%{transform:rotate(2.2deg)}50%{transform:rotate(-2.2deg)}}
 @media (prefers-reduced-motion: reduce){.cem-hang{animation:none}}
 @media (max-width:640px){.cem-hang{display:none}}
-.welcome-banner.small{max-width:420px;margin:0 auto 26px;border-radius:16px}
+.about-cem{margin:0 0 20px;border-radius:16px;overflow:hidden;border:1px solid var(--line);box-shadow:0 10px 26px var(--sh);background:#cfe3f2}
+.about-cem img{display:block;width:100%;height:auto}

@@ -497,11 +497,11 @@ function vAbout(){
   const st=settings(); const paras=(st.aboutText||'').split(/\n+/).filter(Boolean);
   const order=['jts','training','supervising','monitoring','dealing','centre'];
   const people=list('users').filter(u=>u.active&&u.role!=='admin').sort((a,b)=>order.indexOf(a.role)-order.indexOf(b.role));
-  return `${pageHead('About us')}<img class="welcome-banner small" src="${IMG_WELCOME}" width="1600" height="881" alt="${WELCOME_ALT}">
+  return `${pageHead('About us')}
   <div class="two"><section class="about-txt">${paras.map(p=>`<p>${esc(p)}</p>`).join('')}
     <h3 style="margin-top:22px">What we do</h3>
     <ul style="padding-left:20px;line-height:1.8"><li>Free short-term skill training aligned to national standards (NSQF)</li><li>Aptitude tests, assessment and certification</li><li>On-the-job training and placement linkage with employers</li><li>Support for self-employment and small enterprises</li><li>Empanelment of qualified trainers for our centres</li></ul></section>
-  <aside><div class="panel"><h3>Who’s who</h3><div class="tw"><table><tbody>${people.map(u=>`<tr><td><b>${esc(u.name)}</b><div class="small muted">${ROLES[u.role]}${u.centreId?', '+esc(centreName(u.centreId)):''}</div></td></tr>`).join('')||'<tr><td class="muted">To be updated.</td></tr>'}</tbody></table></div></div></aside></div>`;
+  <aside><figure class="about-cem"><img src="${IMG_WELCOME}" width="1600" height="881" alt="${WELCOME_ALT}"></figure><div class="panel"><h3>Who’s who</h3><div class="tw"><table><tbody>${people.map(u=>`<tr><td><b>${esc(u.name)}</b><div class="small muted">${ROLES[u.role]}${u.centreId?', '+esc(centreName(u.centreId)):''}</div></td></tr>`).join('')||'<tr><td class="muted">To be updated.</td></tr>'}</tbody></table></div></div></aside></div>`;
 }
 
 /* Notices */
