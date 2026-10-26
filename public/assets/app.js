@@ -303,25 +303,6 @@ function vHome(){
       .map(([h,i,t,d,c])=>`<a class="tile" href="${h}" style="--c:${c}"><span class="ti">${ic(i)}</span><b>${t}</b><span class="d">${d}</span></a>`).join('')}
   </div>
 
-  <section class="lt-sec band band-si"><div class="sh"><h2>Skill India schemes for you</h2><a href="#skillindia">More about Skill India ${ic('arrow')}</a></div>
-    <p class="muted" style="margin:-6px 0 18px">National programmes of the Ministry of Skill Development &amp; Entrepreneurship, available on the Skill India Digital Hub.</p>
-    <div class="si-grid">${SI_SCHEMES.map(siCard).join('')}</div></section>
-
-  ${(()=>{const fc=extCourses().filter(c=>c.featured).slice(0,3), fj=jobList().filter(j=>j.featured).slice(0,3); if(!fc.length&&!fj.length) return '';
-    return `<section class="lt-sec feat"><div class="sh"><h2><span class="star" aria-hidden="true">★</span> Featured opportunities</h2><span class="small muted">Picked by the department for citizens of Karbi Anglong</span></div>
-    <div class="fgrid">${fc.map(c=>`<a class="fcard course" href="${esc(c.url)}" target="_blank" rel="noopener noreferrer"><span class="ribbon">Featured course</span><span class="fkind">${ic('book')} ${esc(c.provider)} · ${esc(c.topic)}</span><b>${esc(c.title)}</b><span class="fmeta">${esc(c.duration)}</span><span class="fcost">${esc(c.cost)}</span><span class="fgo">Go to course ${ic('ext')}</span></a>`).join('')}${fj.map(j=>`<a class="fcard job" href="${esc(j.url)}" target="_blank" rel="noopener noreferrer"><span class="ribbon">Featured job</span><span class="fkind">${ic('building')} ${esc(j.employer)}</span><b>${esc(j.title)}</b><span class="fmeta">${esc(j.location)}${j.posted?' · Posted '+esc(j.posted):''}</span><span class="fcost">${esc(j.pay)}</span><span class="fgo">View on ${esc(j.source)} ${ic('ext')}</span></a>`).join('')}</div>
-    <div class="row" style="margin-top:16px"><a class="btn" href="#learn">All online courses</a><a class="btn" href="#jobs">All job openings</a></div></section>`})()}
-
-  <section class="lt-sec">
-    <div class="carousel" aria-roledescription="carousel" aria-label="Announcements" onmouseenter="carPause=true" onmouseleave="carPause=false" onfocusin="carPause=true" onfocusout="carPause=false">
-      ${slides.map((s,i)=>`<div class="slide ${s.t} ${i===slideIdx?'on':''}" role="group" aria-roledescription="slide" aria-label="${i+1} of ${slides.length}" ${i===slideIdx?'':'inert aria-hidden="true"'}>
-        <div class="txt"><h2>${esc(s.h)}</h2><p>${esc(s.p)}</p><a class="btn primary" href="${s.a[0]}" ${s.a[2]?'target="_blank" rel="noopener"':''}>${s.a[1]}</a></div>
-        ${s.bg?`<div class="art ph ${s.bg}" role="img" aria-label="${esc(s.alt)}"></div>`:`<div class="art"><span class="glass">${ic(s.icon)}</span></div>`}</div>`).join('')}
-      <button class="cbtn prev" aria-label="Previous slide" onclick="showSlide(slideIdx-1)">❮</button><button class="cbtn next" aria-label="Next slide" onclick="showSlide(slideIdx+1)">❯</button>
-      <div class="dots">${slides.map((_,i)=>`<button aria-label="Show slide ${i+1}" aria-current="${i===slideIdx}" onclick="showSlide(${i})"></button>`).join('')}</div>
-    </div>
-  </section>
-
   <section class="lt-sec band band-soft"><div class="gamsa-deco r bg-gamsa" aria-hidden="true"></div>
     <div class="sh"><h2>Explore courses by sector</h2><a href="#courses">View all ${courses.length} courses ${ic('arrow')}</a></div>
     <div class="sectors">${sectors.map((s,i)=>`<button class="sect" style="--c:${SECT_COL[i%SECT_COL.length]}" onclick="courseSector='${s.id}';go('courses')"><span class="ti">${ic(SECT_ICON[s.id]||'book')}</span><b>${esc(s.name)}</b><small>${courses.filter(c=>c.sectorId===s.id).length} courses</small></button>`).join('')}</div>
@@ -341,6 +322,25 @@ function vHome(){
 
   <section class="lt-sec"><div class="howband"><h2>How it works</h2>
     <div class="hsteps">${steps.map(([t,d])=>`<div><b>${t}</b><span>${d}</span></div>`).join('')}</div></div></section>
+
+  <section class="lt-sec band band-si"><div class="sh"><h2>Skill India schemes for you</h2><a href="#skillindia">More about Skill India ${ic('arrow')}</a></div>
+    <p class="muted" style="margin:-6px 0 18px">National programmes of the Ministry of Skill Development &amp; Entrepreneurship, available on the Skill India Digital Hub.</p>
+    <div class="si-grid">${SI_SCHEMES.map(siCard).join('')}</div></section>
+
+  ${(()=>{const fc=extCourses().filter(c=>c.featured).slice(0,3), fj=jobList().filter(j=>j.featured).slice(0,3); if(!fc.length&&!fj.length) return '';
+    return `<section class="lt-sec feat"><div class="sh"><h2><span class="star" aria-hidden="true">★</span> Featured opportunities</h2><span class="small muted">Picked by the department for citizens of Karbi Anglong</span></div>
+    <div class="fgrid">${fc.map(c=>`<a class="fcard course" href="${esc(c.url)}" target="_blank" rel="noopener noreferrer"><span class="ribbon">Featured course</span><span class="fkind">${ic('book')} ${esc(c.provider)} · ${esc(c.topic)}</span><b>${esc(c.title)}</b><span class="fmeta">${esc(c.duration)}</span><span class="fcost">${esc(c.cost)}</span><span class="fgo">Go to course ${ic('ext')}</span></a>`).join('')}${fj.map(j=>`<a class="fcard job" href="${esc(j.url)}" target="_blank" rel="noopener noreferrer"><span class="ribbon">Featured job</span><span class="fkind">${ic('building')} ${esc(j.employer)}</span><b>${esc(j.title)}</b><span class="fmeta">${esc(j.location)}${j.posted?' · Posted '+esc(j.posted):''}</span><span class="fcost">${esc(j.pay)}</span><span class="fgo">View on ${esc(j.source)} ${ic('ext')}</span></a>`).join('')}</div>
+    <div class="row" style="margin-top:16px"><a class="btn" href="#learn">All online courses</a><a class="btn" href="#jobs">All job openings</a></div></section>`})()}
+
+  <section class="lt-sec">
+    <div class="carousel" aria-roledescription="carousel" aria-label="Announcements" onmouseenter="carPause=true" onmouseleave="carPause=false" onfocusin="carPause=true" onfocusout="carPause=false">
+      ${slides.map((s,i)=>`<div class="slide ${s.t} ${i===slideIdx?'on':''}" role="group" aria-roledescription="slide" aria-label="${i+1} of ${slides.length}" ${i===slideIdx?'':'inert aria-hidden="true"'}>
+        <div class="txt"><h2>${esc(s.h)}</h2><p>${esc(s.p)}</p><a class="btn primary" href="${s.a[0]}" ${s.a[2]?'target="_blank" rel="noopener"':''}>${s.a[1]}</a></div>
+        ${s.bg?`<div class="art ph ${s.bg}" role="img" aria-label="${esc(s.alt)}"></div>`:`<div class="art"><span class="glass">${ic(s.icon)}</span></div>`}</div>`).join('')}
+      <button class="cbtn prev" aria-label="Previous slide" onclick="showSlide(slideIdx-1)">❮</button><button class="cbtn next" aria-label="Next slide" onclick="showSlide(slideIdx+1)">❯</button>
+      <div class="dots">${slides.map((_,i)=>`<button aria-label="Show slide ${i+1}" aria-current="${i===slideIdx}" onclick="showSlide(${i})"></button>`).join('')}</div>
+    </div>
+  </section>
 
   <section class="lt-sec lt-cols band band-soft">
     <div class="card"><div class="sh"><h2>Learn AI and data science online</h2><a href="#learn">All courses ${ic('arrow')}</a></div><div class="lt-list">${extCourses().slice(0,4).map(c=>`<a href="${esc(c.url)}" target="_blank" rel="noopener noreferrer"><span class="t">${esc(c.title)}</span><small>${esc(c.provider)} · ${esc(c.cost)}</small></a>`).join('')}</div></div>
