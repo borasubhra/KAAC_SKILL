@@ -99,6 +99,24 @@ each is a small change if the answer differs.
 | Is 45 fixed or a maximum? Several batches per centre? | 45 is a maximum, adjustable in Settings, and further limited by each centre's capacity. A centre can run several batches, of the same or different trades. |
 | Notify Centre/Training Managers; email students their centre, batch and trainer? | Students are emailed at every step, including centre allotment and batch. Trainers are emailed when assigned. Officers see their pending work as counts on their dashboard and menu. |
 
+## Recruitment (trainers)
+
+The trainer advertisement of November 2026 (**Engagement of 40 Trainers**, last date 10 Nov 2026) is published
+automatically, with its PDF, the first time the portal starts.
+
+- **Scrolling ticker:** open recruitments scroll in a line under the main menu on every public page, with the last
+  date. It pauses when the mouse is over it and stays still for visitors who ask their device for less motion.
+- **Recruitment tab:** lists open and closed recruitments with the full terms, documents required, selection
+  process and instructions, the advertisement PDF, and an **Apply online** button. It replaces the old
+  "Trainers" tab, since trainers now apply against an advertisement.
+- **Rules applied when a trainer applies:** the minimum qualification, the age range (as on the last date),
+  the documents required by the advertisement (photo, Aadhaar, qualification certificates, tribe/caste
+  certificate, residence proof), and the last date. After the last date the application is refused.
+- **Training Manager → Recruitment:** publish, edit, hide or delete recruitments and attach the advertisement.
+  A recruitment that has applications can be hidden but not deleted.
+- **After applying:** trainers go through the same steps as before — the Dealing Assistant verifies documents,
+  and the Training Manager empanels them and assigns them to batches.
+
 ## Email
 
 Emails are queued in the database and sent by the **worker** container, so a bulk "selected" email never
@@ -144,6 +162,7 @@ Browser ──► Apache ──► public/index.html, assets/           (static 
 | `courses`, `sectors`, `centres`, `settings` | Master data, editable by the administrator |
 | `users` | Officer accounts (bcrypt password hashes) |
 | `notices`, `ext_items` | Website notices, online courses and job openings |
+| `recruitments` | Recruitment advertisements; trainers record which one they applied for |
 | `notifications` | Every SMS and email, with sending status |
 | `audit_log` | Every staff action and document view, with user and IP |
 | `counters`, `rate_events` | Number sequences and rate limiting |

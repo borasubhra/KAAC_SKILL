@@ -76,4 +76,27 @@ tx(function () use ($seed) {
 });
 
 if (!is_dir(storage_dir()) && !mkdir(storage_dir(), 0750, true)) { fwrite(STDERR, "[migrate] Cannot create " . storage_dir() . "\n"); exit(1); }
+
+// Recruitment advertisements published with this version, with their PDF.
+tx(function () use ($seed) {
+  foreach ($seed['recruitments'] ?? [] as $r) {
+    if (val('SELECT 1 FROM recruitments WHERE id = :id', [':id' => $r['id']])) continue;
+    $docId = null;
+    $src = __DIR__ . '/../../' . $r['attachment'];
+    if (is_file($src)) {
+      $docId = $r['id'] . '-advert-' . bin2hex(random_bytes(6));
+      $rel = "recruitment/{$r['id']}/$docId.pdf";
+      @mkdir(storage_dir() . "/recruitment/{$r['id']}", 0750, true);
+      if (!copy($src, storage_dir() . "/$rel")) throw new RuntimeException("Cannot copy $src");
+      q("INSERT INTO documents(id, owner_type, owner_id, doc_key, name, mime, size, path) VALUES (:id, 'recruitment', :o, 'advert', :n, 'application/pdf', :s, :p)",
+        [':id' => $docId, ':o' => $r['id'], ':n' => $r['attachmentName'], ':s' => filesize($src), ':p' => $rel]);
+    }
+    q('INSERT INTO recruitments(id, title, post, vacancies, engagement, description, min_qual, min_age, max_age, remuneration, selection, instructions, last_date, attach_doc_id, created_by)
+       VALUES (:id,:t,:post,:v,:e,:d,:q,:mina,:maxa,:rem,:sel,:ins,:ld,:doc,\'System\')', [
+      ':id' => $r['id'], ':t' => $r['title'], ':post' => $r['post'], ':v' => $r['vacancies'], ':e' => $r['engagement'], ':d' => $r['description'],
+      ':q' => $r['minQual'], ':mina' => $r['minAge'], ':maxa' => $r['maxAge'], ':rem' => $r['remuneration'], ':sel' => $r['selection'],
+      ':ins' => $r['instructions'], ':ld' => $r['lastDate'], ':doc' => $docId]);
+    say("Published recruitment {$r['id']}: {$r['title']}.");
+  }
+});
 say('Done.');

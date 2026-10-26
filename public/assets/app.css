@@ -597,3 +597,34 @@ main > .culture-img{border-radius:18px;border:1px solid var(--line);box-shadow:0
 .fgo{margin-top:auto;display:inline-flex;gap:6px;align-items:center;font-weight:600;font-size:13.5px;background:rgba(255,255,255,.18);padding:7px 12px;border-radius:8px;align-self:flex-start;position:relative;z-index:1}
 .fgo svg{width:14px;height:14px}
 .star{color:#d99a06}
+
+/* ===== Recruitment ticker (scrolling announcement under the main menu) ===== */
+.rticker{background:var(--surface);border-bottom:1px solid var(--line)}
+.rticker[hidden]{display:none}
+.rticker .lt-in{padding-top:0;padding-bottom:0;gap:0;align-items:stretch}
+.rt-label{background:var(--red);color:#fff;font-weight:700;font-size:13px;letter-spacing:.02em;padding:9px 14px;display:flex;align-items:center;gap:7px;flex:none;text-decoration:none;white-space:nowrap}
+.rt-label:hover{filter:brightness(1.08)}
+.rt-label svg{width:16px;height:16px}
+.rt-view{overflow:hidden;flex:1;display:flex;align-items:center;-webkit-mask-image:linear-gradient(90deg,transparent,#000 2%,#000 98%,transparent);mask-image:linear-gradient(90deg,transparent,#000 2%,#000 98%,transparent)}
+.rt-track{display:flex;gap:64px;white-space:nowrap;padding-left:28px;animation:rt-scroll var(--rt-dur,40s) linear infinite}
+.rt-view:hover .rt-track,.rt-view:focus-within .rt-track{animation-play-state:paused}
+.rt-track a{color:var(--ink);text-decoration:none;font-size:14px;display:inline-flex;gap:8px;align-items:center}
+.rt-track a:hover,.rt-track a:focus{color:var(--forest);text-decoration:underline}
+.rt-track a b{color:var(--forest)}
+.rt-track .rt-new{background:var(--marigold);color:#2b1d00;font-size:11px;font-weight:700;padding:1px 7px;border-radius:999px}
+.rt-track .rt-last{color:var(--red);font-weight:600}
+@keyframes rt-scroll{to{transform:translateX(-50%)}}
+/* No movement for people who ask for less motion: the line can be scrolled by hand instead. */
+@media (prefers-reduced-motion: reduce){.rt-track{animation:none}.rt-view{overflow-x:auto}}
+@media (max-width:640px){.rt-label span{display:none}.rt-label{padding:9px 11px}}
+
+/* ===== Recruitment page ===== */
+.rec{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:24px;margin-bottom:22px;box-shadow:0 4px 16px var(--sh)}
+.rec-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap}
+.rec-head h2{margin:4px 0 2px}
+.rec-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:16px 0}
+.rec-facts div{background:var(--soft);border-radius:12px;padding:10px 12px}
+.rec-facts dt{font-size:12px;color:var(--muted)}.rec-facts dd{margin:2px 0 0;font-weight:600}
+.rec ol,.rec ul{padding-left:20px;line-height:1.7}
+.rec .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+.rec.closed{opacity:.85}

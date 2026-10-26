@@ -175,15 +175,39 @@ check('Training Manager cannot form batches any more', req('training', 'POST', '
   && req('training', 'POST', 'create_batch', ['course' => 'SKL-IT-01', 'centre' => 'KAAC-C-005', 'start' => $start, 'end' => $end, 'ids' => [$sid]])['code'] === 403);
 
 echo "Trainer registration and Training Manager (CR-08)\n";
-$tform = ['aadhaar' => aadhaar(), 'mobile' => '9123456780', 'email' => 'trainer@example.com', 'name' => 'Test Trainer', 'father' => 'TF',
-  'dob' => '1985-01-01', 'gender' => 'Male', 'address' => 'Diphu', 'district' => 'Karbi Anglong', 'pin' => '782460', 'qual' => 'Graduate',
-  'specialisation' => 'Computer applications', 'indExp' => '5', 'trnExp' => '3', 'skill[0]' => 'SKL-IT-01', 'pc[0]' => 'KAAC-C-005', 'declare' => '1',
-  'photo_thumb' => $thumb, 'doc_photo' => $jpg(), 'doc_aadhaar' => $pdf(), 'doc_qual' => $pdf(), 'doc_exp' => $pdf()];
+echo "Trainer recruitment\n";
+$pub = req('anon', 'GET', 'public')['json'];
+$rec = array_values(array_filter($pub['recruitments'], fn($x) => $x['id'] === 'REC-2026-01'))[0] ?? null;
+check('the trainer advertisement is published and open', $rec && $rec['open'] === true && $rec['minAge'] === 25 && $rec['maxAge'] === 40 && $rec['vacancies'] === 40, $rec);
+$r = req('anon', 'GET', 'doc', ['id' => $rec['attachDocId'] ?? '']);
+check('the advertisement PDF can be downloaded by anyone', $r['code'] === 200 && str_starts_with($r['body'], '%PDF'));
+$tdocs = fn() => ['photo_thumb' => $thumb, 'doc_photo' => $jpg(), 'doc_aadhaar' => $pdf(), 'doc_qual' => $pdf(), 'doc_caste' => $pdf(), 'doc_prc' => $pdf()];
+$tbase = ['recruitmentId' => 'REC-2026-01', 'mobile' => '9123456780', 'email' => 'trainer@example.com', 'name' => 'Test Trainer', 'father' => 'TF',
+  'dob' => '1990-01-01', 'gender' => 'Male', 'address' => 'Diphu', 'district' => 'Karbi Anglong', 'pin' => '782460', 'qual' => 'Graduate',
+  'specialisation' => 'Computer applications', 'indExp' => '5', 'trnExp' => '3', 'skill[0]' => 'SKL-IT-01', 'pc[0]' => 'KAAC-C-005', 'declare' => '1'];
+$t = $tbase + $tdocs(); $t['aadhaar'] = aadhaar(); unset($t['recruitmentId']);
+check('trainers must apply against a recruitment', req('anon', 'POST', 'trainer_register', $t, true)['code'] === 400);
+$t = $tbase + $tdocs(); $t['aadhaar'] = aadhaar(); $t['dob'] = '1984-01-01';
+$r = req('anon', 'POST', 'trainer_register', $t, true);
+check('a candidate over 40 is refused', $r['code'] === 422 && str_contains($r['json']['error'] ?? '', '25 to 40'), $r['json']);
+$t = $tbase + $tdocs(); $t['aadhaar'] = aadhaar(); $t['qual'] = 'Class 10';
+check('below Class 12 is refused', req('anon', 'POST', 'trainer_register', $t, true)['code'] === 422);
+$t = $tbase + $tdocs(); $t['aadhaar'] = aadhaar(); unset($t['doc_caste']);
+check('the tribe/caste certificate is required', req('anon', 'POST', 'trainer_register', $t, true)['code'] === 422);
+$r = req('training', 'POST', 'save_recruitment', ['title' => 'Old recruitment', 'lastDate' => date('Y-m-d', strtotime('-1 day')), 'minAge' => 21, 'maxAge' => 45, 'minQual' => 'Class 12', 'active' => '1'], true);
+check('Training Manager posts a recruitment', $r['code'] === 200 && str_starts_with($r['json']['id'] ?? '', 'REC-'), $r['json']);
+$old = $r['json']['id'] ?? '';
+$t = $tbase + $tdocs(); $t['aadhaar'] = aadhaar(); $t['recruitmentId'] = $old;
+check('applications after the last date are refused', req('anon', 'POST', 'trainer_register', $t, true)['code'] === 409);
+check('the Dealing Assistant cannot post recruitments', req('dealing', 'POST', 'save_recruitment', ['title' => 'X', 'lastDate' => date('Y-m-d'), 'minAge' => 21, 'maxAge' => 45, 'minQual' => 'Class 12'], true)['code'] === 403);
+check('an unused recruitment can be deleted', req('training', 'POST', 'delete_recruitment', ['id' => $old])['code'] === 200);
+$tform = $tbase + $tdocs(); $tform['aadhaar'] = aadhaar();
 $r = req('anon', 'POST', 'trainer_register', $tform, true);
-check('trainer registers', $r['code'] === 200 && str_starts_with($r['json']['trainer']['id'] ?? '', 'KAAC-SDE-TR-'), $r['json']);
+check('an eligible trainer applies', $r['code'] === 200 && str_starts_with($r['json']['trainer']['id'] ?? '', 'KAAC-SDE-TR-') && $r['json']['trainer']['recruitmentId'] === 'REC-2026-01', $r['json']);
 $tid = $r['json']['trainer']['id'] ?? '';
 check('Dealing Assistant verifies the trainer', req('dealing', 'POST', 'trainer_action', ['id' => $tid, 'act' => 'verify'])['code'] === 200);
 check('Training Manager empanels the trainer', req('training', 'POST', 'trainer_action', ['id' => $tid, 'act' => 'empanel'])['code'] === 200);
+check('a recruitment with applicants cannot be deleted', req('training', 'POST', 'delete_recruitment', ['id' => 'REC-2026-01'])['code'] === 400);
 $r = req('training', 'GET', 'staff_data');
 check('Training Manager sees the batch', in_array($bid, array_column($r['json']['batches'], 'id'), true));
 check('Training Manager sees only candidates in batches', array_column($r['json']['students'], 'id') === [$sid]);

@@ -290,3 +290,29 @@ ALTER TABLE notifications ADD COLUMN IF NOT EXISTS attempts int NOT NULL DEFAULT
 ALTER TABLE notifications ADD COLUMN IF NOT EXISTS sent_at timestamptz;
 ALTER TABLE notifications ADD COLUMN IF NOT EXISTS last_error text;
 CREATE INDEX IF NOT EXISTS notifications_queue ON notifications(id) WHERE status = 'Queued';
+
+/* ---------- Recruitment advertisements (trainer engagement, Nov 2026) ---------- */
+CREATE TABLE IF NOT EXISTS recruitments (
+  id            text PRIMARY KEY,
+  title         text NOT NULL,
+  post          text NOT NULL DEFAULT 'Trainer',
+  vacancies     int,
+  engagement    text NOT NULL DEFAULT '',
+  description   text NOT NULL DEFAULT '',
+  min_qual      text NOT NULL DEFAULT 'Class 12',
+  min_age       int NOT NULL DEFAULT 21,
+  max_age       int NOT NULL DEFAULT 60,
+  remuneration  text NOT NULL DEFAULT '',
+  selection     text NOT NULL DEFAULT '',
+  instructions  text NOT NULL DEFAULT '',
+  last_date     date NOT NULL,             -- applications are accepted up to the end of this day (IST)
+  attach_doc_id text REFERENCES documents(id) ON DELETE SET NULL,
+  active        boolean NOT NULL DEFAULT true,
+  created_by    text NOT NULL DEFAULT '',
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  updated_at    timestamptz NOT NULL DEFAULT now(),
+  CHECK (min_age <= max_age)
+);
+ALTER TABLE trainers ADD COLUMN IF NOT EXISTS recruitment_id text REFERENCES recruitments(id);
+ALTER TABLE documents DROP CONSTRAINT IF EXISTS documents_owner_type_check;
+ALTER TABLE documents ADD CONSTRAINT documents_owner_type_check CHECK (owner_type IN ('student','trainer','notice','recruitment'));

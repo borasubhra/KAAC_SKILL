@@ -460,5 +460,24 @@
       "role": "training",
       "centreId": ""
     }
+  ],
+  "recruitments": [
+    {
+      "id": "REC-2026-01",
+      "title": "Engagement of 40 Trainers",
+      "post": "Trainer",
+      "vacancies": 40,
+      "engagement": "Contractual and part-time, initially for 6 months, extendable by a further 6 months on mutual agreement",
+      "description": "Skill Development & Entrepreneurship Department, KAAC invites applications from interested candidates from Karbi Anglong and West Karbi Anglong districts for the engagement of 40 Trainers under the Department of Skill Development & Entrepreneurship, Karbi Anglong Autonomous Council (KAAC), Diphu.",
+      "minQual": "Class 12",
+      "minAge": 25,
+      "maxAge": 40,
+      "remuneration": "Starting from ₹6,000 per month",
+      "selection": "After receiving the applications, shortlisted candidates will be invited for an interview / personality test. Selected candidates may be provided with Training of Trainers (ToT) and certification, subject to the applicable training and certification requirements.",
+      "instructions": "In case of any false declaration made by the candidate, the application will be rejected.\nApplications received after the last date shall not be entertained.\nOnly shortlisted candidates will be called for interview, through a notification in the local leading newspapers. No TA/DA will be provided.\nThe undersigned reserves the right to re-schedule or cancel the interview, and to reject any or all applications without assigning any reason.\nCanvassing directly or indirectly shall disqualify a candidate.",
+      "lastDate": "2026-11-10",
+      "attachment": "db/seed/trainer-advertisement-2026.pdf",
+      "attachmentName": "Advertisement Notice - Engagement of 40 Trainers.pdf"
+    }
   ]
 }

@@ -15,6 +15,7 @@ function h_public(array $in): array {
     'courses' => array_map('map_course', all('SELECT * FROM courses ORDER BY id')),
     'centres' => array_map('map_centre', all('SELECT * FROM centres ORDER BY id')),
     'notices' => array_map('map_notice', all(NOTICE_SQL . ' WHERE n.active ORDER BY n.notice_date DESC, n.created_at DESC')),
+    'recruitments' => array_map('map_recruitment', all(RECRUITMENT_SQL . ' WHERE r.active ORDER BY r.last_date DESC, r.created_at DESC')),
     'ext' => ext_items(),
     'settings' => public_settings(),
     'users' => $people,
@@ -202,6 +203,10 @@ function h_apply(array $in): array {
 
 function h_trainer_register(array $in): array {
   rate_check('register:' . client_ip(), 120, 3600, 'Too many registrations from this connection. Try again later.');
+  // Trainers apply against a recruitment advertisement, whose age, qualification and last date apply.
+  $rec = one('SELECT * FROM recruitments WHERE id = :id AND active', [':id' => str_in($in, 'recruitmentId', 40)]);
+  if (!$rec) fail('Choose the recruitment you are applying for.');
+  if ($rec['last_date'] < today()) fail('Applications for this recruitment closed on ' . fmt_d($rec['last_date']) . '.', 409);
   $p = [];
   $aadhaar = check_person_basics($in, $p);
   $email = str_in($in, 'email', 120);
@@ -210,7 +215,13 @@ function h_trainer_register(array $in): array {
     if (str_in($in, $k) === '') $p[] = "Fill in $label.";
   }
   $dob = str_in($in, 'dob', 10);
-  if (valid_date($dob) && age_on($dob) < 21) $p[] = 'Trainers must be at least 21 years old.';
+  if (valid_date($dob)) {
+    // Age as on the last date of application.
+    $age = (new DateTimeImmutable($dob))->diff(new DateTimeImmutable($rec['last_date']))->y;
+    if ($age < (int)$rec['min_age'] || $age > (int)$rec['max_age']) $p[] = "Age must be {$rec['min_age']} to {$rec['max_age']} years as on " . fmt_d($rec['last_date']) . " (yours: $age).";
+  }
+  $qi = array_search(str_in($in, 'qual'), QUALS, true);
+  if ($qi !== false && $qi < array_search($rec['min_qual'], QUALS, true)) $p[] = "The minimum qualification for this recruitment is {$rec['min_qual']} pass.";
   foreach (['indExp' => 'industry', 'trnExp' => 'training'] as $k => $label) {
     $v = $in[$k] ?? '';
     if (!is_numeric($v) || $v < 0 || $v > 50) $p[] = "Enter $label experience in years (0 if none).";
@@ -229,7 +240,7 @@ function h_trainer_register(array $in): array {
   $thumb = thumb_in($in);
 
   try {
-    $row = tx(function () use ($in, $aadhaar, $hmac, $email, $skills, $sectors, $pcs, $thumb) {
+    $row = tx(function () use ($in, $rec, $aadhaar, $hmac, $email, $skills, $sectors, $pcs, $thumb) {
       $dup = one("SELECT id FROM trainers WHERE aadhaar_hmac = :h AND status <> 'rejected'", [':h' => $hmac]);
       if ($dup) fail("A trainer registration ({$dup['id']}) already exists for this Aadhaar number. Use Track application to check it.", 409);
       $id = 'KAAC-SDE-TR-' . year() . '-' . pad(next_number('trainer-' . year()));
@@ -237,9 +248,10 @@ function h_trainer_register(array $in): array {
       $name = str_in($in, 'name', 120);
       $history = [['at' => now_iso(), 'by' => $name, 'role' => 'Trainer', 'action' => 'Trainer registration submitted', 'remark' => '']];
       $row = one('INSERT INTO trainers(id, name, father, dob, gender, aadhaar_last4, aadhaar_hmac, mobile, email, address, district, pin, qual,
-          specialisation, ind_exp, trn_exp, tot_no, tot_body, courses, sectors, pref_centres, photo_thumb, docs, history)
+          specialisation, ind_exp, trn_exp, tot_no, tot_body, courses, sectors, pref_centres, photo_thumb, docs, history, recruitment_id)
         VALUES (:id,:name,:father,:dob,:gender,:l4,:hmac,:mobile,:email,:address,:district,:pin,:qual,:spec,:ie,:te,:totno,:totbody,
-          :courses,:sectors,:pcs,:thumb,:docs,:history) RETURNING *', [
+          :courses,:sectors,:pcs,:thumb,:docs,:history,:rec) RETURNING *', [
+        ':rec' => $rec['id'],
         ':id' => $id, ':name' => $name, ':father' => str_in($in, 'father', 120), ':dob' => str_in($in, 'dob', 10), ':gender' => str_in($in, 'gender'),
         ':l4' => substr($aadhaar, -4), ':hmac' => $hmac, ':mobile' => str_in($in, 'mobile', 10), ':email' => $email,
         ':address' => str_in($in, 'address', 200), ':district' => str_in($in, 'district'), ':pin' => str_in($in, 'pin', 6), ':qual' => str_in($in, 'qual'),
@@ -350,8 +362,9 @@ function h_verify(array $in): array {
 function h_doc(array $in): never {
   $d = one('SELECT * FROM documents WHERE id = :id', [':id' => str_in($in, 'id', 120)]);
   if (!$d) fail('This file is not available.', 404);
-  if ($d['owner_type'] === 'notice') {
-    if (!me() && !val('SELECT 1 FROM notices WHERE attach_doc_id = :id AND active', [':id' => $d['id']])) fail('This file is not available.', 404);
+  if ($d['owner_type'] === 'notice' || $d['owner_type'] === 'recruitment') {
+    $table = $d['owner_type'] === 'notice' ? 'notices' : 'recruitments';
+    if (!me() && !val("SELECT 1 FROM $table WHERE attach_doc_id = :id AND active", [':id' => $d['id']])) fail('This file is not available.', 404);
   } else {
     $me = require_staff();
     if (!staff_may_see_owner($me, $d['owner_type'], $d['owner_id'])) fail('Your role does not allow this file.', 403);

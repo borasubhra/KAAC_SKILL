@@ -6,7 +6,7 @@ const IMG_RENDER="assets/img/render.jpg";
 const IMG_PEOPLE="assets/img/people.jpg";
 const IMG_MUSEUM="assets/img/museum.jpg";
 const IMG_GAMSA="assets/img/gamsa.png";
-const PH_BG={learn:'bg-museum',jobs:'bg-gate',courses:'bg-render',register:'bg-gate',trainer:'bg-render',track:'bg-museum',verify:'bg-gate',notices:'bg-render',about:'bg-museum',contact:'bg-gate',login:'bg-museum'};
+const PH_BG={recruitment:'bg-people',learn:'bg-museum',jobs:'bg-gate',courses:'bg-render',register:'bg-gate',trainer:'bg-render',track:'bg-museum',verify:'bg-gate',notices:'bg-render',about:'bg-museum',contact:'bg-gate',login:'bg-museum'};
 (function(){const s=document.createElement('style');s.textContent=`.bg-gate{background-image:url(${IMG_GATE})!important}.bg-render{background-image:url(${IMG_RENDER})!important}.bg-people{background-image:url(${IMG_PEOPLE})!important}.bg-museum{background-image:url(${IMG_MUSEUM})!important}.bg-gamsa{background-image:url(${IMG_GAMSA})!important}`;document.head.appendChild(s)})();
 /* ============================== Utilities ============================== */
 const $ = s => document.querySelector(s);
@@ -18,6 +18,8 @@ const fmtD = d => d ? new Date(d).toLocaleDateString('en-IN',{day:'2-digit',mont
 const fmtDT = d => d ? new Date(d).toLocaleString('en-IN',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
 const YEAR = new Date().getFullYear();
 function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>t.classList.remove('show'),3200)}
+/** Age in whole years on a given date (YYYY-MM-DD). */
+function ageOn(dob,on){const d=new Date(dob),n=new Date(on);let a=n.getFullYear()-d.getFullYear();if(n<new Date(n.getFullYear(),d.getMonth(),d.getDate()))a--;return a}
 function age(dob){if(!dob)return 0;const d=new Date(dob),n=new Date();let a=n.getFullYear()-d.getFullYear();if(n<new Date(n.getFullYear(),d.getMonth(),d.getDate()))a--;return a}
 
 /* Aadhaar: Verhoeff checksum (UIDAI uses this for the 12th digit) */
@@ -68,7 +70,7 @@ const DEFAULT_SETTINGS = {deptName:'Skill Development & Entrepreneurship Departm
 /* ============================== Data (PHP + PostgreSQL API) ==============================
    All records live in PostgreSQL behind api.php. The server decides what each visitor may see and do;
    this page only displays what it is sent and asks the server to make changes. */
-const COLLS = ['students','sectors','courses','centres','batches','users','notifs','ojt','settings','trainers','notices','extcourses','jobs'];
+const COLLS = ['students','sectors','courses','centres','batches','users','notifs','ojt','settings','trainers','notices','extcourses','jobs','recruitments'];
 const S = {}; COLLS.forEach(c => S[c] = {});
 const STAFF_COLLS = ['students','trainers','batches','ojt','notifs'];
 let DEMO = false, LOADED = false, LOAD_ERROR = '';
@@ -94,7 +96,7 @@ async function api(route,{method='GET',data,form,query}={}){
   return body;
 }
 function applyData(d){
-  ['sectors','courses','centres','notices','users',...STAFF_COLLS].forEach(c=>{if(d[c]) S[c]=byId(d[c])});
+  ['sectors','courses','centres','notices','users','recruitments',...STAFF_COLLS].forEach(c=>{if(d[c]) S[c]=byId(d[c])});
   if(d.settings) S.settings={main:d.settings};
   if(d.ext){S.extcourses=byId(d.ext.courses);S.jobs=byId(d.ext.jobs)}
 }
@@ -138,7 +140,7 @@ const FORM_ROUTES=['apply','trainer'];
 let routeArg='';
 /* Navigates to a route. Setting the hash it already has fires no hashchange, so redraw directly in that case. */
 function go(r){if(location.hash==='#'+r)readHash();else location.hash=r}
-function readHash(){const h=(location.hash||'#home').slice(1);const [r,arg]=h.split('/');route=['home','about','courses','learn','jobs','student','apply','reset','trainer','track','verify','notices','contact','login','staff'].includes(r)?r:'home';
+function readHash(){const h=(location.hash||'#home').slice(1);const [r,arg]=h.split('/');route=['home','about','courses','learn','jobs','student','apply','reset','recruitment','trainer','track','verify','notices','contact','login','staff'].includes(r)?r:'home';
   routeArg=decodeURIComponent(arg||'');
   if(route==='apply'&&!STU){applyFor=routeArg;route='student'}
   if(route==='verify'&&arg&&decodeURIComponent(arg)!==verifyQ){verifyQ=decodeURIComponent(arg);runVerify()}
@@ -160,9 +162,11 @@ function render(){
   $('#staffLink').setAttribute('href', ME ? '#staff' : '#login');
   $('#studentLink').textContent = STU ? 'My applications' : 'Apply online';
   $('#studentLink').toggleAttribute('aria-current', ['student','apply','reset'].includes(route));
+  $('#pubnav a[href="#recruitment"]').toggleAttribute('aria-current', ['recruitment','trainer'].includes(route));
+  renderTicker();
   const m=$('#main');
   if(!LOADED){m.innerHTML=LOAD_ERROR?`<div class="panel" style="margin:40px auto;max-width:560px"><h2>The portal is not available</h2><p>${esc(LOAD_ERROR)}</p><button class="btn primary" onclick="init()">Try again</button></div>`:'<p class="muted" style="padding:60px 0;text-align:center">Loading…</p>';return}
-  m.innerHTML = ({learn:vLearn,jobs:vJobs,about:vAbout,notices:vNotices,contact:vContact,trainer:vTrainerReg,home:vHome,courses:vCourses,student:vStudent,apply:vApply,reset:vReset,track:vTrack,verify:vVerify,login:vLogin,staff:vStaff}[route]||vHome)();
+  m.innerHTML = ({learn:vLearn,jobs:vJobs,about:vAbout,notices:vNotices,contact:vContact,trainer:vTrainerReg,home:vHome,courses:vCourses,student:vStudent,apply:vApply,reset:vReset,track:vTrack,verify:vVerify,login:vLogin,staff:vStaff,recruitment:vRecruitment}[route]||vHome)();
   if(route==='apply') wireApply();
   if(route==='trainer') wireTrainer();
 }
@@ -202,7 +206,7 @@ function renderChrome(){
     <div><div class="ft-brand"><span class="logo-slot">${logo}</span><b class="h" style="margin:0">${esc(st.deptName)}</b></div>
       <p>${esc(st.council)}<br>${esc(st.address)}</p><p>${st.phone?'Helpline: '+esc(st.phone)+'<br>':''}${st.email?'Email: '+esc(st.email)+'<br>':''}${esc(st.officeHours||'')}</p></div>
     <div><b class="h">Quick links</b><a href="#home">Home</a><a href="#about">About us</a><a href="#courses">Courses</a><a href="#learn">Online learning</a><a href="#jobs">Jobs</a><a href="#notices">Notices</a><a href="#contact">Contact us</a></div>
-    <div><b class="h">Services</b><a href="#student">Apply online (students)</a><a href="#trainer">Trainer registration</a><a href="#track">Track status</a><a href="#verify">Verify certificate</a><a href="#login">Staff login</a></div>
+    <div><b class="h">Services</b><a href="#student">Apply online (students)</a><a href="#recruitment">Recruitment (trainers)</a><a href="#track">Track status</a><a href="#verify">Verify certificate</a><a href="#login">Staff login</a></div>
     <div><b class="h">Important links</b>${ext('https://karbianglong.co.in/','KAAC official website')}${ext('https://artpskaac.in/stipend/','Stipend for ST(H) students')}${ext('https://karbiyouthfestival.com/','Karbi Youth Festival')}${ext('https://assam.gov.in/','Assam State Portal')}${ext('https://www.skillindiadigital.gov.in/','Skill India Digital Hub')}${ext('https://www.india.gov.in/','National Portal of India')}</div>
   </div>
   <div class="ft-bottom"><span>© ${YEAR} ${esc(st.deptName)}, ${esc(st.council)} · Last updated ${fmtD(last||nowISO())}${DEMO?' · <span id="modeNote">Development mode: demo accounts are enabled.</span>':''}</span>
@@ -263,11 +267,12 @@ function gSuggest(v){
 function vHome(){
   const st=settings(), courses=list('courses').filter(c=>c.active), sectors=list('sectors'), centres=list('centres').filter(c=>c.active);
   const ns=latestNotices(4); const top=ns[0]; const logo=st.logo?`<img src="${esc(st.logo)}" alt="">`:'KAAC';
+  const openRec=openRecruitments()[0];
   const slides=[
     {t:'t1',bg:'bg-render',alt:'Karbi-style ceremonial gateway',icon:'userplus',h:`Registration open for the ${YEAR} session`,p:`Free training in ${courses.length} courses across ${sectors.length} sectors for the youth of Karbi Anglong and West Karbi Anglong.`,a:['#student','Apply now']},
     {t:'t2',bg:'bg-museum',alt:'Nothengpi Karbi Heritage Museum lit at night',icon:'book',h:'Stipend for ST (Hills) students',p:'The council gives stipends to ST (Hills) students pursuing professional courses. Applications are made on the council’s stipend portal.',a:['https://artpskaac.in/stipend/','Visit the stipend portal',1]},
     {t:'t3',bg:'bg-people',alt:'Young people of Karbi Anglong in traditional attire',icon:'sparkle',h:'Karbi Youth Festival',p:'The council’s annual festival celebrating Karbi music, dance and culture, with young people from across the region.',a:['https://karbiyouthfestival.com/','Visit the festival website',1]},
-    {t:'t4',icon:'trainer',h:'Trainers and subject experts wanted',p:'Register with your qualifications and experience to join the department’s trainer panel and teach at our skill centres.',a:['#trainer','Register as a trainer']}
+    {t:'t4',icon:'trainer',h:openRec?openRec.title:'Trainers and subject experts wanted',p:openRec?`${openRec.engagement||'Apply online'}. Last date ${fmtD(openRec.lastDate)}.`:'Watch this space for the department’s next trainer recruitment.',a:['#recruitment',openRec?'See the advertisement and apply':'See recruitment']}
   ];
   const fc0=extCourses().find(c=>c.featured), fj0=jobList().find(j=>j.featured);
   if(fj0) slides.splice(1,0,{t:'t2',icon:'building',h:`Now hiring: ${fj0.title}`,p:`${fj0.employer}, ${fj0.location} · ${fj0.pay}. See this and more openings on our Jobs page.`,a:['#jobs','See job openings']});
@@ -289,7 +294,7 @@ function vHome(){
     ${HILLS}
   </section>
   <div class="tiles">
-    ${[['#student','userplus','Apply for a course','Create an account and apply online','#0b6e4f'],['#trainer','trainer','Become a trainer','Join the trainer panel','#2563eb'],['#track','search','Track status','Follow your application','#d97706'],['#verify','badge','Verify certificate','For employers','#be185d']]
+    ${[['#student','userplus','Apply for a course','Create an account and apply online','#0b6e4f'],['#recruitment','trainer','Recruitment','Trainers wanted: apply online','#2563eb'],['#track','search','Track status','Follow your application','#d97706'],['#verify','badge','Verify certificate','For employers','#be185d']]
       .map(([h,i,t,d,c])=>`<a class="tile" href="${h}" style="--c:${c}"><span class="ti">${ic(i)}</span><b>${t}</b><span class="d">${d}</span></a>`).join('')}
   </div>
 
@@ -507,6 +512,49 @@ function downloadAttachment(id){
   const a=document.createElement('a');a.href=docUrl(id,true);document.body.appendChild(a);a.click();a.remove();
 }
 
+/* ---------- Recruitment: scrolling ticker and Recruitment page ---------- */
+Object.assign(ICONS,{megaphone:'<path d="M3 11v2a1 1 0 0 0 1 1h3l6 4V6L7 10H4a1 1 0 0 0-1 1z"/><path d="M17 8a5 5 0 0 1 0 8M20 5a9 9 0 0 1 0 14"/>'});
+/** Recruitments still taking applications, nearest closing date first. */
+const openRecruitments = () => list('recruitments').filter(r=>r.open).sort((a,b)=>a.lastDate.localeCompare(b.lastDate));
+const daysLeft = d => Math.round((new Date(d+'T23:59:59+05:30')-Date.now())/864e5);
+/* A line under the main menu announcing open recruitments. It scrolls, pauses on hover or keyboard focus,
+   and stays still for visitors who ask their device for less motion. */
+function renderTicker(){
+  const box=$('#rticker'); const recs=openRecruitments();
+  if(!recs.length||route==='staff'){box.hidden=true;box.innerHTML='';return}
+  const items=recs.map(r=>{const n=daysLeft(r.lastDate);return `<a href="#recruitment">${isNew(r.updatedAt)?'<span class="rt-new">New</span>':''}<b>${esc(r.title)}</b> · <span class="rt-last">Last date ${esc(fmtD(r.lastDate))}${n<=7?` (${n<=0?'today':n+' day'+(n>1?'s':'')+' left'})`:''}</span>${r.remuneration?' · '+esc(r.remuneration):''} · Apply online →</a>`}).join('');
+  const sig=recs.map(r=>r.id+r.updatedAt).join();
+  if(box.dataset.sig===sig&&!box.hidden) return;  // keep the animation running smoothly across redraws
+  box.dataset.sig=sig; box.hidden=false;
+  box.innerHTML=`<div class="lt-in"><a class="rt-label" href="#recruitment">${ic('megaphone')}<span>Recruitment</span></a>
+    <div class="rt-view" aria-label="Recruitment announcements"><div class="rt-track" style="--rt-dur:${Math.max(25,recs.length*22)}s">${items}<span aria-hidden="true" style="display:contents">${items.replace(/<a /g,'<a tabindex="-1" ')}</span></div></div></div>`;
+}
+function vRecruitment(){
+  const recs=list('recruitments').sort((a,b)=>b.lastDate.localeCompare(a.lastDate));
+  const open=recs.filter(r=>r.open), past=recs.filter(r=>!r.open);
+  return `${pageHead('Recruitment','Advertisements of the Skill Development & Entrepreneurship Department. Apply online before the last date.')}
+  ${open.length?open.map(recCard).join(''):'<div class="panel" style="margin-bottom:22px">There is no recruitment open right now. Please check again later, or see <a href="#notices">Notices</a>.</div>'}
+  ${past.length?`<h2 style="margin-top:28px">Closed recruitments</h2>${past.map(recCard).join('')}`:''}`;
+}
+function recCard(r){
+  const n=daysLeft(r.lastDate); const ins=(r.instructions||'').split('\n').filter(Boolean);
+  return `<article class="rec ${r.open?'':'closed'}" id="rec-${esc(r.id)}"><div class="rec-head"><div><span class="tag ${r.open?'ok':''}">${r.open?'Open':'Closed'}</span> <span class="small muted">${esc(r.id)}</span>
+    <h2>${esc(r.title)}</h2><p class="muted" style="margin:0">${esc(r.engagement)}</p></div>
+    <div class="small" style="text-align:right"><b class="${r.open?'rt-last':''}" style="font-size:15px">Last date: ${esc(fmtD(r.lastDate))}</b>${r.open&&n<=14?`<div class="muted">${n<=0?'Closes today':n+' day'+(n>1?'s':'')+' left'}</div>`:''}</div></div>
+    ${r.description?`<p style="margin-top:12px">${esc(r.description)}</p>`:''}
+    <dl class="rec-facts">${r.vacancies?`<div><dt>Posts</dt><dd>${r.vacancies} ${esc(r.post)}${r.vacancies>1?'s':''}</dd></div>`:''}
+      <div><dt>Minimum qualification</dt><dd>${esc(r.minQual)} pass or above</dd></div>
+      <div><dt>Age</dt><dd>${r.minAge} to ${r.maxAge} years</dd></div>
+      ${r.remuneration?`<div><dt>Remuneration</dt><dd>${esc(r.remuneration)}</dd></div>`:''}
+      <div><dt>Mode of application</dt><dd>Online, on this portal</dd></div></dl>
+    <h3>Documents required</h3><ul>${r.docs.filter(d=>d.req).map(d=>`<li>${esc(d.label)}</li>`).join('')}</ul>
+    ${r.selection?`<h3>Selection</h3><p>${esc(r.selection)}</p>`:''}
+    ${ins.length?`<h3>Important instructions</h3><ol>${ins.map(i=>`<li>${esc(i)}</li>`).join('')}</ol>`:''}
+    <div class="actions">${r.open?`<a class="btn primary" href="#trainer/${esc(r.id)}">Apply online</a>`:''}
+      ${r.attachDocId?`<a class="btn" href="${esc(docUrl(r.attachDocId))}" target="_blank" rel="noopener">View advertisement (PDF)</a><a class="btn" href="${esc(docUrl(r.attachDocId,true))}">Download</a>`:''}
+      <a class="btn" href="#track">Track your application</a></div></article>`;
+}
+
 /* Contact */
 function vContact(){
   const st=settings();
@@ -518,6 +566,44 @@ function vContact(){
   ${list('centres').filter(c=>c.active).sort((a,b)=>a.id.localeCompare(b.id)).map(c=>`<tr><td class="id">${esc(c.id)}</td><td>${esc(c.name)}<div class="small muted">${esc(c.address)}${c.nearbyTown?' · near '+esc(c.nearbyTown):''}</div></td><td class="small">${esc(c.type)}</td><td>${esc(c.district)}</td><td class="small">${c.sectors.map(sectorName).join(', ')}</td><td class="small">${esc(c.facilities||'—')}</td><td class="small">${esc(c.phone||'—')}</td></tr>`).join('')}
   </tbody></table></div></section>`;
 }
+
+/* Staff: recruitment advertisements (Training Manager) */
+function sRecruitAdm(){
+  const rs=list('recruitments').sort((a,b)=>b.lastDate.localeCompare(a.lastDate));
+  return `<h1>Recruitment</h1><div class="row" style="margin-bottom:14px"><span class="muted">Open recruitments scroll under the website’s main menu and are listed on the Recruitment page. Trainers apply online against them until the last date.</span><button class="btn primary" style="margin-left:auto" onclick="editRecruitment()">Publish a recruitment</button></div>
+  <div class="tw"><table><thead><tr><th>ID</th><th>Title</th><th>Last date</th><th>Eligibility</th><th>Applications</th><th>Advertisement</th><th>Status</th><th></th></tr></thead><tbody>
+  ${rs.map(r=>{const n=list('trainers').filter(t=>t.recruitmentId===r.id).length;return `<tr><td class="id">${esc(r.id)}</td><td>${esc(r.title)}</td><td class="small" style="white-space:nowrap">${fmtD(r.lastDate)}</td><td class="small">${esc(r.minQual)}+ · ${r.minAge}–${r.maxAge} yrs</td><td>${n}</td>
+    <td class="small">${r.attachDocId?`<a href="${esc(docUrl(r.attachDocId))}" target="_blank" rel="noopener">${esc(r.attachName||'PDF')}</a>`:'—'}</td>
+    <td>${!r.active?'<span class="tag">Hidden</span>':r.open?'<span class="tag ok">Open</span>':'<span class="tag warn">Closed</span>'}</td><td><button class="btn sm" onclick="editRecruitment('${esc(r.id)}')">Edit</button></td></tr>`}).join('')||'<tr><td colspan="8" class="muted">No recruitments yet.</td></tr>'}
+  </tbody></table></div>`;
+}
+function editRecruitment(id){
+  const r=id?S.recruitments[id]:null;
+  const f=(n,l,v,ph='',type='text')=>`<div class="field"><label>${l}</label><input name="${n}" type="${type}" value="${esc(v??'')}" placeholder="${esc(ph)}"></div>`;
+  openModal(`<div class="mh"><h3 style="margin:0">${r?'Edit recruitment':'Publish a recruitment'}</h3><button class="btn sm" onclick="closeModal()">Close</button></div>
+  <form class="mb" onsubmit="event.preventDefault();saveRecruitment(this,'${esc(id||'')}')">
+  <div class="grid g2">${f('title','Title',r?.title,'e.g. Engagement of 40 Trainers')}${f('engagement','Terms of engagement',r?.engagement,'e.g. Contractual, part-time, 6 months')}</div>
+  <div class="grid g4">${f('post','Post',r?.post||'Trainer')}${f('vacancies','Number of posts',r?.vacancies,'','number')}${f('remuneration','Remuneration',r?.remuneration,'e.g. Starting from ₹6,000 per month')}
+    <div class="field"><label>Last date</label><input name="lastDate" type="date" required value="${esc(r?.lastDate||'')}"><div class="hint">Applications close at the end of this day</div></div></div>
+  <div class="grid g4"><div class="field"><label>Minimum qualification</label><select name="minQual">${QUALS.map(q=>`<option ${(r?.minQual||'Class 12')===q?'selected':''}>${q}</option>`).join('')}</select></div>
+    ${f('minAge','Minimum age',r?.minAge??25,'','number')}${f('maxAge','Maximum age',r?.maxAge??40,'','number')}
+    <div class="field"><label>Visibility</label><select name="active"><option value="1">Published</option><option value="0" ${r&&!r.active?'selected':''}>Hidden</option></select></div></div>
+  <div class="field"><label>Description</label><textarea name="description" rows="3">${esc(r?.description||'')}</textarea></div>
+  <div class="field"><label>Selection process</label><textarea name="selection" rows="2">${esc(r?.selection||'')}</textarea></div>
+  <div class="field"><label>Important instructions (one per line)</label><textarea name="instructions" rows="4">${esc(r?.instructions||'')}</textarea></div>
+  <div class="field"><label>Advertisement (PDF up to 2 MB, or an image)</label><input type="file" id="recFile" accept="application/pdf,image/*">${r?.attachName?`<div class="hint">Current file: ${esc(r.attachName)} · <label style="display:inline;font-weight:500"><input type="checkbox" id="recRemove"> Remove it</label></div>`:''}</div>
+  <p class="small muted">Applicants must upload: ${TRAINER_DOCS.filter(d=>d.req).map(d=>esc(d.label)).join(', ')}.</p>
+  <div class="row" style="justify-content:flex-end">${r?`<button type="button" class="btn danger" onclick="delRecruitment('${esc(id)}')">Delete</button>`:''}<button class="btn primary">${r?'Save':'Publish'}</button></div></form>`,true);
+}
+async function saveRecruitment(f,id){
+  const fd=new FormData(); fd.append('id',id);
+  ['title','engagement','post','vacancies','remuneration','lastDate','minQual','minAge','maxAge','active','description','selection','instructions'].forEach(n=>fd.append(n,f.elements[n].value.trim()));
+  const file=$('#recFile').files[0];
+  if(file){try{fd.append('file',await uploadable(file))}catch(e){toast(e.message);return}}
+  else if($('#recRemove')?.checked) fd.append('removeFile','1');
+  if(await act('save_recruitment',null,id?'Recruitment saved.':'Recruitment published.',fd)){closeModal();render()}
+}
+async function delRecruitment(id){if(!confirm('Delete this recruitment?'))return;if(await act('delete_recruitment',{id},'Recruitment deleted.')){closeModal();render()}}
 
 /* Staff: notices & updates */
 function sNoticesAdm(){
@@ -897,6 +983,7 @@ const MENU=[
   ['ojt','OJT letters',['training','centre','jts']],
   ['mapping','Centre mapping',['centre','training','supervising']],
   ['notifs','SMS & email log',['supervising']],
+  ['recruitAdm','Recruitment',['training']],
   ['noticesAdm','Notices & updates',['training']],
   ['extAdm','Online learning & jobs',['training']],
   ['master','Courses, sectors & centres',[]],
@@ -922,7 +1009,7 @@ function pendingCount(v){
 function vStaff(){
   const items=MENU.filter(([k,,r])=>r===null||can(...r));
   if(!items.find(i=>i[0]===staffView)) staffView='dash';
-  const views={extAdm:sExtAdm,noticesAdm:sNoticesAdm,trainers:sTrainers,dash:sDash,apps:sApps,approved:sApproved,allot:sAllot,batches:sBatches,results:sResults,certs:sCerts,ojt:sOjt,mapping:sMapping,notifs:sNotifs,master:sMaster,users:sUsers,settings:sSettings};
+  const views={recruitAdm:sRecruitAdm,extAdm:sExtAdm,noticesAdm:sNoticesAdm,trainers:sTrainers,dash:sDash,apps:sApps,approved:sApproved,allot:sAllot,batches:sBatches,results:sResults,certs:sCerts,ojt:sOjt,mapping:sMapping,notifs:sNotifs,master:sMaster,users:sUsers,settings:sSettings};
   return `<div class="staff"><aside class="side">
     <div class="who"><b>${esc(ME.name)}</b><span class="small muted">${ROLES[ME.role]}${ME.centreId?' · '+esc(centreName(ME.centreId)):''}</span></div>
     ${items.map(([k,l])=>{const n=pendingCount(k);return `<button class="nav" aria-current="${staffView===k}" onclick="staffView='${k}';render()"><span>${l}</span>${n?`<span class="badge">${n}</span>`:''}</button>`}).join('')}
@@ -1203,11 +1290,14 @@ async function startBatch(id){
 /* ---------- Trainers: registration, verification, empanelment, assignment ---------- */
 const TSTATUS={submitted:['Submitted','info'],returned:['Returned for correction','warn'],verified:['Documents verified','info'],empanelled:['Empanelled','ok'],rejected:['Rejected','bad'],inactive:['Inactive','']};
 const tStatusTag=s=>`<span class="tag ${TSTATUS[s]?.[1]||''}">${esc(TSTATUS[s]?.[0]||s)}</span>`;
+/* Documents required by the trainer recruitment advertisement; the rest are optional. */
 const TRAINER_DOCS=[
   {key:'photo',label:'Passport-size photograph',req:true,img:true},
   {key:'aadhaar',label:'Aadhaar card (copy)',req:true},
-  {key:'qual',label:'Highest qualification certificate',req:true},
-  {key:'exp',label:'Experience certificate(s)',req:true},
+  {key:'qual',label:'Educational qualification certificates (Class X onwards)',req:true},
+  {key:'caste',label:'Tribe / caste certificate',req:true},
+  {key:'prc',label:'Proof of residence in the KAAC area',req:true},
+  {key:'exp',label:'Experience certificate(s), if any',req:false},
   {key:'tot',label:'Training of Trainers (ToT) certificate',req:false},
   {key:'resume',label:'Résumé / CV',req:false},
   {key:'bank',label:'Bank passbook first page (for honorarium)',req:false}
@@ -1218,11 +1308,19 @@ const trainerClash = (tid,start,end,except) => list('batches').find(b=>b.id!==ex
 function trainerLabel(b){const t=S.trainers[b.trainerId];return t?`${esc(t.name)} <span class="muted small">(${esc(t.id)})</span>`:(b.trainer?esc(b.trainer):'<span class="tag warn">Not assigned</span>')}
 
 /* Public registration form */
+/* Trainers apply against an open recruitment advertisement (#trainer/<recruitment ID>). */
 function vTrainerReg(){
-  const centres=list('centres').filter(c=>c.active);
-  return `${pageHead('Trainer registration')}
-  <p class="muted">Join the department’s trainer panel. After document verification and empanelment, trainers are assigned to batches at our centres. Fields marked <span style="color:var(--bad)">*</span> are required.</p>
-  <form id="trForm" novalidate>
+  const centres=list('centres').filter(c=>c.active); const open=openRecruitments();
+  const r=S.recruitments[routeArg]?.open?S.recruitments[routeArg]:(open.length===1?open[0]:null);
+  if(!r) return `${pageHead('Trainer application')}${open.length?`<div class="panel"><h3>Choose the recruitment you are applying for</h3>${open.map(x=>`<div class="row" style="justify-content:space-between;padding:8px 0;border-bottom:1px dashed var(--line)"><span><b>${esc(x.title)}</b><span class="small muted"> · last date ${esc(fmtD(x.lastDate))}</span></span><a class="btn sm primary" href="#trainer/${esc(x.id)}">Apply</a></div>`).join('')}</div>`
+    :'<div class="panel">Trainer applications are accepted only while a recruitment is open. There is none open right now. See <a href="#recruitment">Recruitment</a> for past and upcoming advertisements.</div>'}`;
+  const lo=new Date(r.lastDate); const maxDob=new Date(lo.getFullYear()-r.minAge,lo.getMonth(),lo.getDate()).toISOString().slice(0,10);
+  return `${pageHead('Trainer application',r.title)}
+  <div class="panel flat" style="margin-bottom:16px"><div class="row" style="justify-content:space-between"><div><b>${esc(r.title)}</b> <span class="small muted">${esc(r.id)}</span>
+    <div class="small">Eligibility: ${esc(r.minQual)} pass or above · age ${r.minAge}–${r.maxAge} years as on ${esc(fmtD(r.lastDate))}${r.remuneration?' · '+esc(r.remuneration):''}</div>
+    <div class="small rt-last">Last date for applications: ${esc(fmtD(r.lastDate))}</div></div><a class="btn sm" href="#recruitment">Read the advertisement</a></div></div>
+  <p class="muted">Shortlisted candidates are called for an interview / personality test. Fields marked <span style="color:var(--bad)">*</span> are required.</p>
+  <form id="trForm" novalidate><input type="hidden" name="recruitmentId" value="${esc(r.id)}">
   <fieldset><legend>Aadhaar and contact</legend><div class="grid g3">
     <div class="field"><label>Aadhaar number <span class="req">*</span></label><input name="aadhaar" inputmode="numeric" maxlength="14" placeholder="12-digit number" autocomplete="off"><div class="hint">Only the last 4 digits are stored on record.${DEMO?` <a href="#" onclick="event.preventDefault();document.querySelector('#trForm [name=aadhaar]').value=testAadhaar()">Fill a test number</a>`:''}</div></div>
     <div class="field"><label>Mobile number <span class="req">*</span></label><input name="mobile" inputmode="numeric" maxlength="10" placeholder="10 digits"></div>
@@ -1231,7 +1329,7 @@ function vTrainerReg(){
   <fieldset><legend>Personal details</legend><div class="grid g4">
     <div class="field"><label>Full name (as in Aadhaar) <span class="req">*</span></label><input name="name"></div>
     <div class="field"><label>Father’s / spouse’s name <span class="req">*</span></label><input name="father"></div>
-    <div class="field"><label>Date of birth <span class="req">*</span></label><input name="dob" type="date" max="${today()}"></div>
+    <div class="field"><label>Date of birth <span class="req">*</span></label><input name="dob" type="date" max="${maxDob}"><div class="hint">Age ${r.minAge}–${r.maxAge} as on ${esc(fmtD(r.lastDate))}</div></div>
     <div class="field"><label>Gender <span class="req">*</span></label><select name="gender"><option value="">Select</option><option>Female</option><option>Male</option><option>Transgender</option></select></div>
   </div></fieldset>
   <fieldset><legend>Address</legend><div class="grid g3">
@@ -1260,11 +1358,11 @@ function vTrainerReg(){
   </fieldset>
   <div class="panel flat" style="margin-bottom:16px"><label style="display:flex;gap:10px;font-weight:500"><input type="checkbox" name="declare"> I declare that the information and documents are genuine. I consent to the use of my Aadhaar number for identity verification for empanelment only.</label></div>
   <div id="trErr" class="err" style="font-size:14px;margin-bottom:12px"></div>
-  <div class="row"><button class="btn primary" type="submit" id="trBtn">Submit trainer registration</button><a class="btn" href="#home">Cancel</a></div>
+  <div class="row"><button class="btn primary" type="submit" id="trBtn">Submit application</button><a class="btn" href="#recruitment">Cancel</a></div>
   </form>`;
 }
 function wireTrainer(){
-  const f=$('#trForm'); const a=f.elements.aadhaar;
+  const f=$('#trForm'); if(!f) return; const a=f.elements.aadhaar;
   a.addEventListener('input',()=>{const v=a.value.replace(/\D/g,'').slice(0,12);a.value=v.replace(/(\d{4})(?=\d)/g,'$1 ')});
   f.addEventListener('submit',submitTrainer);
 }
@@ -1278,7 +1376,9 @@ async function submitTrainer(e){
   if(!/^[6-9]\d{9}$/.test(v('mobile'))) p.push('Enter a valid 10-digit mobile number starting with 6–9.');
   if(!/^\S+@\S+\.\S+$/.test(v('email'))) p.push('Enter a valid email address.');
   [['name','full name'],['father','father’s / spouse’s name'],['dob','date of birth'],['gender','gender'],['address','address'],['district','district'],['qual','highest qualification'],['specialisation','specialisation']].forEach(([n,l])=>{if(!v(n))p.push('Fill in '+l+'.')});
-  if(v('dob')&&age(v('dob'))<21) p.push('Trainers must be at least 21 years old.');
+  const rec=S.recruitments[v('recruitmentId')];
+  if(v('dob')&&rec){const a=ageOn(v('dob'),rec.lastDate);if(a<rec.minAge||a>rec.maxAge)p.push(`Age must be ${rec.minAge} to ${rec.maxAge} years as on ${fmtD(rec.lastDate)} (yours: ${a}).`)}
+  if(v('qual')&&rec&&QUALS.indexOf(v('qual'))<QUALS.indexOf(rec.minQual)) p.push(`The minimum qualification is ${rec.minQual} pass.`);
   if(!/^\d{6}$/.test(v('pin'))) p.push('Enter a 6-digit PIN code.');
   if(v('indExp')===''||+v('indExp')<0) p.push('Enter industry experience in years (0 if none).');
   if(v('trnExp')===''||+v('trnExp')<0) p.push('Enter training experience in years (0 if none).');
@@ -1289,7 +1389,7 @@ async function submitTrainer(e){
   const btn=$('#trBtn'); btn.disabled=true; btn.textContent='Uploading documents…';
   try{
     const fd=new FormData();
-    ['mobile','email','name','father','dob','gender','address','district','pin','qual','specialisation','indExp','trnExp','totNo','totBody'].forEach(n=>fd.append(n,v(n)));
+    ['recruitmentId','mobile','email','name','father','dob','gender','address','district','pin','qual','specialisation','indExp','trnExp','totNo','totBody'].forEach(n=>fd.append(n,v(n)));
     fd.append('aadhaar',aadhaar); fd.append('declare','1');
     skills.forEach(c=>fd.append('skill[]',c)); pcs.forEach(c=>fd.append('pc[]',c));
     await addFiles(fd,f,TRAINER_DOCS);
@@ -1304,7 +1404,7 @@ function trainerTrackHTML(t){
   const bs=trainerBatches(t.id);
   return `<div class="grid g2"><div class="panel">
     <div class="row" style="align-items:flex-start">${t.photo?`<img class="photo" src="${esc(t.photo)}" alt="">`:''}<div><h2 style="margin-bottom:4px">${esc(t.name)}</h2><div class="muted small">${esc(t.id)} · Trainer</div><div style="margin-top:8px">${tStatusTag(t.status)}</div></div></div>
-    <hr class="sep"><dl class="kv">${t.empanelNo?`<dt>Empanelment no.</dt><dd>${esc(t.empanelNo)}</dd>`:''}<dt>Skills</dt><dd>${(t.courses||[]).map(c=>esc(courseName(c))).join(', ')}</dd><dt>Experience</dt><dd>${t.indExp} yrs industry, ${t.trnExp} yrs training</dd></dl>
+    <hr class="sep"><dl class="kv">${t.recruitmentId?`<dt>Applied for</dt><dd>${esc(S.recruitments[t.recruitmentId]?.title||t.recruitmentId)}</dd>`:''}${t.empanelNo?`<dt>Empanelment no.</dt><dd>${esc(t.empanelNo)}</dd>`:''}<dt>Skills</dt><dd>${(t.courses||[]).map(c=>esc(courseName(c))).join(', ')}</dd><dt>Experience</dt><dd>${t.indExp} yrs industry, ${t.trnExp} yrs training</dd></dl>
     ${bs.length?`<h3 style="margin-top:16px">Assigned batches</h3><div class="tw"><table><thead><tr><th>Batch</th><th>Skill</th><th>Centre</th><th>Dates</th><th>Status</th></tr></thead><tbody>${bs.map(b=>`<tr><td class="id">${esc(b.id)}</td><td>${esc(courseName(b.courseId))}</td><td>${esc(centreName(b.centreId))}<div class="small muted">${esc(b.centreId)}</div></td><td class="small">${fmtD(b.start)} – ${fmtD(b.end)}</td><td><span class="tag">${esc(b.status)}</span></td></tr>`).join('')}</tbody></table></div>`:''}
     ${t.status==='returned'?tResubmitHTML(t):''}
   </div>
@@ -1328,7 +1428,7 @@ function sTrainers(){
   ts.sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
   const hint={dealing:'Open a registration to check documents, then mark it verified, return it for correction or reject it.',training:'Empanel verified trainers. Only empanelled trainers can be assigned to batches.',centre:'Trainers assigned to batches at your centre.'}[ME.role]||'';
   return `<h1>Trainers</h1>${hint?`<p class="muted">${hint}</p>`:''}
-  <p class="small muted">New trainers register from the public <a href="#trainer">Trainer registration</a> page.</p>
+  <p class="small muted">Trainers apply online against a <a href="#recruitment">recruitment advertisement</a>, which you publish under Recruitment.</p>
   <div class="row" style="margin-bottom:12px">
     <select style="max-width:200px" onchange="trF.status=this.value;render()"><option value="">All statuses</option>${Object.entries(TSTATUS).map(([k,v])=>`<option value="${k}" ${trF.status===k?'selected':''}>${v[0]}</option>`).join('')}</select>
     <select style="max-width:260px" onchange="trF.course=this.value;render()"><option value="">All skills</option>${list('courses').map(c=>`<option value="${c.id}" ${trF.course===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select>
@@ -1350,7 +1450,7 @@ function openTrainer(id){
   openModal(`<div class="mh"><h3 style="margin:0">${esc(t.name)} · ${esc(t.id)}</h3><button class="btn sm" onclick="closeModal()">Close</button></div>
   <div class="mb"><div class="grid g2">
     <div><div class="row" style="align-items:flex-start;margin-bottom:12px">${t.photo?`<img class="photo" src="${esc(t.photo)}" alt="">`:''}<div>${tStatusTag(t.status)}<div class="small muted" style="margin-top:6px">Registered ${fmtDT(t.createdAt)}</div></div></div>
-      <dl class="kv"><dt>Aadhaar</dt><dd>XXXX XXXX ${esc(t.aadhaarLast4)}</dd><dt>Father / spouse</dt><dd>${esc(t.father)}</dd><dt>Date of birth</dt><dd>${fmtD(t.dob)} (age ${age(t.dob)})</dd><dt>Gender</dt><dd>${esc(t.gender)}</dd>
+      <dl class="kv">${t.recruitmentId?`<dt>Recruitment</dt><dd>${esc(S.recruitments[t.recruitmentId]?.title||'')} (${esc(t.recruitmentId)})</dd>`:''}<dt>Aadhaar</dt><dd>XXXX XXXX ${esc(t.aadhaarLast4)}</dd><dt>Father / spouse</dt><dd>${esc(t.father)}</dd><dt>Date of birth</dt><dd>${fmtD(t.dob)} (age ${age(t.dob)})</dd><dt>Gender</dt><dd>${esc(t.gender)}</dd>
       <dt>Mobile / email</dt><dd>${esc(t.mobile)}<br>${esc(t.email)}</dd><dt>Address</dt><dd>${esc([t.address,t.district,t.pin].filter(Boolean).join(', '))}</dd>
       <dt>Qualification</dt><dd>${esc(t.qual)} · ${esc(t.specialisation)}</dd><dt>Experience</dt><dd>${t.indExp} yrs industry, ${t.trnExp} yrs training</dd>
       <dt>ToT certificate</dt><dd>${t.totNo?esc(t.totNo)+(t.totBody?' · '+esc(t.totBody):''):'Not certified'}</dd>

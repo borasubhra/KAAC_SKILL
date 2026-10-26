@@ -53,6 +53,7 @@ function map_trainer(array $r, string $photo = 'url'): array {
     'address' => $r['address'], 'district' => $r['district'], 'pin' => $r['pin'], 'qual' => $r['qual'], 'specialisation' => $r['specialisation'],
     'indExp' => num($r['ind_exp']), 'trnExp' => num($r['trn_exp']), 'totNo' => $r['tot_no'], 'totBody' => $r['tot_body'],
     'courses' => pg_arr($r['courses']), 'sectors' => pg_arr($r['sectors']), 'prefCentres' => pg_arr($r['pref_centres']), 'status' => $r['status'],
+    'recruitmentId' => $r['recruitment_id'] ?? '',
     'photo' => photo_value('trainer', $r['id'], $r['photo_thumb'], $photo, $r['updated_at']),
     'docs' => jd($r['docs'], []), 'history' => jd($r['history'], []), 'empanelledAt' => iso($r['empanelled_at']), 'createdAt' => iso($r['created_at']),
   ];
@@ -101,6 +102,19 @@ function map_notice(array $r): array {
     'attachType' => $r['attach_type'] ?? '', 'createdAt' => iso($r['created_at']), 'updatedAt' => iso($r['updated_at']), 'by' => $r['created_by'],
   ];
 }
+/** A recruitment is open until the end of its last date (Indian time). */
+function map_recruitment(array $r): array {
+  return [
+    'id' => $r['id'], 'title' => $r['title'], 'post' => $r['post'], 'vacancies' => $r['vacancies'] === null ? null : (int)$r['vacancies'],
+    'engagement' => $r['engagement'], 'description' => $r['description'], 'minQual' => $r['min_qual'], 'minAge' => (int)$r['min_age'],
+    'maxAge' => (int)$r['max_age'], 'remuneration' => $r['remuneration'], 'selection' => $r['selection'], 'instructions' => $r['instructions'],
+    'lastDate' => $r['last_date'], 'open' => (bool)$r['active'] && $r['last_date'] >= today(), 'active' => (bool)$r['active'],
+    'attachDocId' => $r['attach_doc_id'] ?? '', 'attachName' => $r['attach_name'] ?? '', 'updatedAt' => iso($r['updated_at']),
+    'docs' => array_map(fn($k, $d) => ['key' => $k, 'label' => $d['label'], 'req' => $d['req']], array_keys(TRAINER_DOCS), TRAINER_DOCS),
+  ];
+}
+const RECRUITMENT_SQL = 'SELECT r.*, d.name AS attach_name FROM recruitments r LEFT JOIN documents d ON d.id = r.attach_doc_id';
+
 const NOTICE_SQL = 'SELECT n.*, d.name AS attach_name, d.mime AS attach_type FROM notices n LEFT JOIN documents d ON d.id = n.attach_doc_id';
 
 /** Settings anyone may see. Gateway details stay with staff. */

@@ -237,3 +237,68 @@ function h_remove_ext(array $in): array {
   audit("ext:remove:$kind", $id);
   return ['ok' => true];
 }
+
+/* ---------- Recruitment advertisements ---------- */
+
+function h_save_recruitment(array $in): array {
+  $me = require_staff('training');
+  $id = str_in($in, 'id', 40);
+  $title = str_in($in, 'title', 200);
+  $last = str_in($in, 'lastDate', 10);
+  $minAge = (int)($in['minAge'] ?? 0);
+  $maxAge = (int)($in['maxAge'] ?? 0);
+  $minQual = str_in($in, 'minQual');
+  if ($title === '') fail('Add a title, for example “Engagement of 40 Trainers”.');
+  if (!valid_date($last)) fail('Choose the last date for applications.');
+  if ($minAge < 18 || $maxAge > 70 || $minAge > $maxAge) fail('Enter an age range between 18 and 70, with the minimum not above the maximum.');
+  if (!in_array($minQual, QUALS, true)) fail('Choose the minimum qualification.');
+  $vac = trim((string)($in['vacancies'] ?? ''));
+  if ($vac !== '' && (!ctype_digit($vac) || (int)$vac < 1)) fail('Enter the number of posts, or leave it blank.');
+  try {
+    $id = tx(function () use ($in, $me, $id, $title, $last, $minAge, $maxAge, $minQual, $vac) {
+      $old = $id !== '' ? one('SELECT * FROM recruitments WHERE id = :id FOR UPDATE', [':id' => $id]) : null;
+      if ($id !== '' && !$old) fail('Recruitment not found.', 404);
+      if (!$old) {
+        // Skip numbers already used (the advertisement shipped with the portal is REC-2026-01).
+        do { $id = 'REC-' . year() . '-' . pad(next_number('recruitment-' . year()), 2); }
+        while (val('SELECT 1 FROM recruitments WHERE id = :id', [':id' => $id]));
+      }
+      if (!$old) q("INSERT INTO recruitments(id, title, last_date, created_by) VALUES (:id, '', :d, :by)", [':id' => $id, ':d' => $last, ':by' => $me['name']]);
+      $attach = $old['attach_doc_id'] ?? null;
+      if ($f = upload_in('file')) {
+        if ($attach) delete_document($attach);
+        $attach = store_upload($f, 'recruitment', $id, 'advert', false)['id'];
+      } elseif (!empty($in['removeFile']) && $attach) {
+        q('UPDATE recruitments SET attach_doc_id = NULL WHERE id = :id', [':id' => $id]);
+        delete_document($attach);
+        $attach = null;
+      }
+      q('UPDATE recruitments SET title = :t, post = :post, vacancies = :v, engagement = :e, description = :d, min_qual = :q, min_age = :mina,
+           max_age = :maxa, remuneration = :rem, selection = :sel, instructions = :ins, last_date = :ld, attach_doc_id = :doc, active = :a, updated_at = now()
+         WHERE id = :id', [
+        ':t' => $title, ':post' => str_in($in, 'post', 100) ?: 'Trainer', ':v' => $vac === '' ? null : (int)$vac, ':e' => str_in($in, 'engagement', 500),
+        ':d' => str_in($in, 'description', 5000), ':q' => $minQual, ':mina' => $minAge, ':maxa' => $maxAge, ':rem' => str_in($in, 'remuneration', 200),
+        ':sel' => str_in($in, 'selection', 3000), ':ins' => str_in($in, 'instructions', 5000), ':ld' => $last, ':doc' => $attach,
+        ':a' => str_in($in, 'active') === '0' ? 'false' : 'true', ':id' => $id]);
+      audit('recruitment:save', $id);
+      return $id;
+    });
+  } catch (Throwable $e) { discard_new_files(); throw $e; }
+  return ['id' => $id];
+}
+
+/** Recruitments with applications are hidden rather than deleted, so the applications keep their link. */
+function h_delete_recruitment(array $in): array {
+  require_staff('training');
+  tx(function () use ($in) {
+    $r = one('SELECT * FROM recruitments WHERE id = :id FOR UPDATE', [':id' => str_in($in, 'id', 40)]);
+    if (!$r) fail('Recruitment not found.', 404);
+    if (val('SELECT 1 FROM trainers WHERE recruitment_id = :id', [':id' => $r['id']])) {
+      fail('Trainers have applied against this recruitment. Set it to Hidden instead of deleting it.');
+    }
+    q('DELETE FROM recruitments WHERE id = :id', [':id' => $r['id']]);
+    if ($r['attach_doc_id']) delete_document($r['attach_doc_id']);
+    audit('recruitment:delete', $r['id']);
+  });
+  return ['ok' => true];
+}

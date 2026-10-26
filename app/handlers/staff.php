@@ -34,6 +34,7 @@ function h_staff_data(array $in): array {
       ? 'SELECT o.* FROM ojt_letters o JOIN students s ON s.id = o.student_id WHERE s.centre_id = :c ORDER BY o.created_at DESC'
       : 'SELECT * FROM ojt_letters ORDER BY created_at DESC', $p)),
     'notices' => array_map('map_notice', all(NOTICE_SQL . ' ORDER BY n.notice_date DESC, n.created_at DESC')),
+    'recruitments' => array_map('map_recruitment', all(RECRUITMENT_SQL . ' ORDER BY r.last_date DESC, r.created_at DESC')),
     'courses' => array_map('map_course', all('SELECT * FROM courses ORDER BY id')),
     'sectors' => array_map('map_sector', all('SELECT * FROM sectors ORDER BY id')),
     'centres' => array_map('map_centre', all('SELECT * FROM centres ORDER BY id')),
