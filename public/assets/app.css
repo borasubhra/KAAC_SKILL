@@ -717,3 +717,12 @@ body.is-home .lt-navrow{box-shadow:0 3px 0 var(--saffron)}
 @media (max-width:640px){.cem-hang{display:none}}
 .about-cem{margin:0 0 20px;border-radius:16px;overflow:hidden;border:1px solid var(--line);box-shadow:0 10px 26px var(--sh);background:#cfe3f2}
 .about-cem img{display:block;width:100%;height:auto}
+
+/* ===== Apply online button beside Staff login ===== */
+.lt-navrow .lt-nav a.navapply.navapply{margin:6px 0 6px auto;padding:10px 22px;border-radius:999px;border:2px solid #fff;background:#fff;color:var(--navy);font-size:15px}
+.lt-navrow .lt-nav a.navapply.navapply:hover{background:var(--saffron);border-color:var(--saffron);color:#14211c}
+.lt-navrow .lt-nav a.navapply.navapply[aria-current]{background:#fff;color:var(--navy);border-color:var(--saffron);box-shadow:0 0 0 2px var(--saffron)}
+.lt-navrow .lt-nav a.navstaff{margin-left:10px}
+@media (max-width:1020px){.lt-navrow .lt-nav a.navapply.navapply{margin:10px 18px 0;text-align:center}.lt-navrow .lt-nav a.navstaff{margin:10px 18px}}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .lt-navrow .lt-nav a.navapply.navapply{color:#0D3B66}}
+:root[data-theme="dark"] .lt-navrow .lt-nav a.navapply.navapply{color:#0D3B66}

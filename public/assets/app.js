@@ -731,15 +731,10 @@ function vStudent(){
 }
 function vStudentLogin(){
   const c=applyFor&&S.courses[applyFor];
-  return `${pageHead('Apply online','Create a student account, then choose a trade and fill in the application form.')}
-  ${c?`<div class="callout" style="margin-bottom:16px">Log in or create an account to apply for <b>${esc(c.name)}</b>.</div>`:''}
-  <div class="grid g2" style="align-items:start">
-    <div class="panel"><h3>Log in</h3><form onsubmit="event.preventDefault();studentLogin(this)">
-      <div class="field"><label>Email</label><input name="email" type="email" autocomplete="email" required></div>
-      <div class="field"><label>Password</label><input name="password" type="password" autocomplete="current-password" required></div>
-      <div class="err" id="sLoginErr"></div>
-      <div class="row" style="justify-content:space-between"><button class="btn primary">Log in</button><a href="#" onclick="event.preventDefault();forgotDialog()">Forgot password?</a></div></form></div>
-    <div class="panel"><h3>New here? Create an account</h3><form onsubmit="event.preventDefault();studentSignup(this)">
+  return `${pageHead('Apply online','New applicants register first. Already registered? Log in to apply for a trade or follow your application.')}
+  ${c?`<div class="callout" style="margin-bottom:16px">Log in or create an account to apply.</div>`:''}
+  <div class="grid g2 apply-gate" style="align-items:start">
+    <div class="panel"><h3>New registration</h3><p class="small muted" style="margin-top:-4px">First time here? Create your account.</p><form onsubmit="event.preventDefault();studentSignup(this)">
       <div class="field"><label>Full name (as in Aadhaar)</label><input name="name" autocomplete="name" required></div>
       <div class="grid g2"><div class="field"><label>Email</label><input name="email" type="email" autocomplete="email" required><div class="hint">Your application number and updates are sent here</div></div>
       <div class="field"><label>Mobile number</label><input name="mobile" inputmode="numeric" maxlength="10" autocomplete="tel" required></div></div>
@@ -748,6 +743,11 @@ function vStudentLogin(){
       <div class="err" id="sSignupErr"></div>
       <button class="btn primary">Create account</button>
       <p class="small muted" style="margin-top:10px">Creating an account is not an application. After you log in, choose a trade and apply.</p></form></div>
+    <div class="panel"><h3>Already registered</h3><p class="small muted" style="margin-top:-4px">Log in with the email and password you registered with.</p><form onsubmit="event.preventDefault();studentLogin(this)">
+      <div class="field"><label>Email</label><input name="email" type="email" autocomplete="email" required></div>
+      <div class="field"><label>Password</label><input name="password" type="password" autocomplete="current-password" required></div>
+      <div class="err" id="sLoginErr"></div>
+      <div class="row" style="justify-content:space-between"><button class="btn primary">Log in</button><a href="#" onclick="event.preventDefault();forgotDialog()">Forgot password?</a></div></form></div>
   </div>`;
 }
 async function afterStudentLogin(){
@@ -1111,9 +1111,9 @@ function sApps(){
   if(appF.course) st=st.filter(s=>(s.skillId||s.pref1)===appF.course);
   if(appF.q){const q=appF.q.toLowerCase();st=st.filter(s=>(s.id+s.name+s.mobile+s.village).toLowerCase().includes(q))}
   st.sort((a,b)=>a.createdAt.localeCompare(b.createdAt));
-  const hint={dealing:'Open each application and check every document. Forward complete applications to the Supervising & Monitoring Officer, return them to the applicant to re-upload, or reject them.',
-    supervising:'Shortlist candidates who meet the eligibility and requirements. Shortlisted candidates go to the Joint Secretary for approval.',
-    jts:'Approve the shortlist. Approved candidates are emailed that they have been selected, and the list goes to the Centre Manager.'}[ME.role]||'';
+  const hint={dealing:'Open each application and check every document. Forward complete applications to the Supervising & Monitoring Officer, return them to the applicant to re-upload, or reject them. Applications marked “Sent back” were returned by the S&M Officer.',
+    supervising:'Shortlist candidates who meet the eligibility and requirements and forward them to the Joint Secretary, or return an application to the Dealing Assistant with a remark.',
+    jts:'Give the final approval, or return an application to the S&M Officer with a remark. Approved candidates are emailed that they have been selected, and the list goes to the Centre Manager.'}[ME.role]||'';
   const bulk=inQueue&&BULK[ME.role];
   return `<h1>Applications</h1>${hint?`<p class="muted">${hint}</p>`:''}
   ${queue?`<div class="chips" style="margin-bottom:12px"><button class="chip" aria-pressed="${appF.view==='queue'}" onclick="appF.view='queue';render()">Waiting for me (${myStudents().filter(s=>s.status===queue).length})</button><button class="chip" aria-pressed="${appF.view==='all'}" onclick="appF.view='all';render()">All applications</button></div>`:''}
@@ -1126,7 +1126,7 @@ function sApps(){
   ${bulk&&st.length?`<div class="row" style="margin-bottom:10px"><button class="btn primary" onclick="bulkAction('${bulk[0]}')">${bulk[1]}</button><span class="small muted">Tick the candidates first. Use Open to act on one candidate or add a remark.</span></div>`:''}
   <div class="tw"><table><thead><tr>${bulk?`<th><input type="checkbox" aria-label="Select all" onchange="document.querySelectorAll('.appPick').forEach(i=>i.checked=this.checked)"></th>`:''}<th>Application ID</th><th>Name</th><th>Trade</th><th>Eligibility</th><th>Submitted</th><th>Stage</th><th></th></tr></thead><tbody>
   ${st.map(s=>{const e=eligibility(s,s.pref1);return `<tr>${bulk?`<td><input type="checkbox" class="appPick" value="${esc(s.id)}" aria-label="Select ${esc(s.name)}"></td>`:''}<td class="id">${esc(s.id)}</td><td>${esc(s.name)}<div class="small muted">${esc(s.village)}, ${esc(s.district)}</div></td><td>${esc(courseName(s.pref1))}<div class="small muted">${esc(s.pref1)}</div></td>
-    <td>${e.ok?'<span class="tag ok">Eligible</span>':`<span class="tag warn" title="${esc(e.issues.join('; '))}">Check</span>`}</td><td class="small">${fmtD(s.createdAt)}</td><td>${statusTag(s.status)}</td>
+    <td>${e.ok?'<span class="tag ok">Eligible</span>':`<span class="tag warn" title="${esc(e.issues.join('; '))}">Check</span>`}</td><td class="small">${fmtD(s.createdAt)}</td><td>${statusTag(s.status)}${(s.history||[]).at(-1)?.internal?' <span class="tag warn" title="Sent back by a senior officer">Sent back</span>':''}</td>
     <td><button class="btn sm" onclick="openApp('${esc(s.id)}')">Open</button></td></tr>`}).join('')||`<tr><td colspan="8" class="muted">${inQueue?'Nothing is waiting for you.':'No applications match these filters.'}</td></tr>`}
   </tbody></table></div>`;
 }
@@ -1146,11 +1146,12 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
 async function openApp(id){
   const s=S.students[id]; const e=eligibility(s,s.pref1);
   const actions=[];
-  if(can('dealing')&&s.status==='submitted') actions.push(`<button class="btn danger" onclick="appAction('${id}','reject')">Reject</button><button class="btn" onclick="appAction('${id}','return')">Return for re-upload</button><button class="btn primary" onclick="appAction('${id}','verify')">Verify and forward to S&amp;M Officer</button>`);
-  if(can('supervising')&&s.status==='verified') actions.push(`<button class="btn danger" onclick="appAction('${id}','notshortlist')">Not shortlisted</button><button class="btn primary" onclick="appAction('${id}','shortlist')">Shortlist and forward to Joint Secretary</button>`);
-  if(can('jts')&&s.status==='shortlisted') actions.push(`<button class="btn danger" onclick="appAction('${id}','notapprove')">Do not approve</button><button class="btn primary" onclick="appAction('${id}','approve')">Approve</button>`);
+  if(can('dealing')&&s.status==='submitted') actions.push(`<button class="btn danger" onclick="appAction('${id}','reject')">Reject</button><button class="btn" onclick="appAction('${id}','return')">Return to applicant</button><button class="btn primary" onclick="appAction('${id}','verify')">Verify and forward to S&amp;M Officer</button>`);
+  if(can('supervising')&&s.status==='verified') actions.push(`<button class="btn danger" onclick="appAction('${id}','notshortlist')">Not shortlisted</button><button class="btn" onclick="appAction('${id}','returnda')">Return to Dealing Assistant</button><button class="btn primary" onclick="appAction('${id}','shortlist')">Shortlist and forward to Joint Secretary</button>`);
+  if(can('jts')&&s.status==='shortlisted') actions.push(`<button class="btn danger" onclick="appAction('${id}','notapprove')">Do not approve</button><button class="btn" onclick="appAction('${id}','returnsm')">Return to S&amp;M Officer</button><button class="btn primary" onclick="appAction('${id}','approve')">Approve (final)</button>`);
+  const lastStep=(s.history||[]).at(-1), sentBack=lastStep&&lastStep.internal&&actions.length?lastStep:null;
   openModal(`<div class="mh"><h3 style="margin:0">${esc(s.name)} · ${esc(s.id)}</h3><button class="btn sm" onclick="closeModal()">Close</button></div>
-  <div class="mb"><div class="grid g2">
+  <div class="mb">${sentBack?`<div class="callout" style="margin-bottom:14px"><b>${esc(sentBack.action)}</b>${sentBack.remark?`: ${esc(sentBack.remark)}`:''}<div class="small muted">${fmtDT(sentBack.at)} · ${esc(sentBack.by)}</div></div>`:''}<div class="grid g2">
     <div><div class="row" style="align-items:flex-start;margin-bottom:12px">${s.photo?`<img class="photo" src="${esc(s.photo)}" alt="">`:''}<div>${statusTag(s.status)}<div class="small muted" style="margin-top:6px">Submitted ${fmtDT(s.createdAt)}</div></div></div>
       <dl class="kv"><dt>Aadhaar</dt><dd>XXXX XXXX ${esc(s.aadhaarLast4)}</dd><dt>Father / mother</dt><dd>${esc(s.father)}${s.mother?' / '+esc(s.mother):''}</dd><dt>Date of birth</dt><dd>${fmtD(s.dob)} (age ${age(s.dob)})</dd><dt>Gender / category</dt><dd>${esc(s.gender)} · ${esc(s.category)}${s.pwd==='Yes'?' · PwD':''}</dd>
       <dt>Religion / employment</dt><dd>${esc(s.religion||'—')} · ${esc(s.employmentStatus||'—')}</dd>
@@ -1168,7 +1169,7 @@ async function openApp(id){
       <div id="docView" style="margin-top:12px"></div>
       <h3 style="margin-top:16px">History</h3><ul class="tl">${[...(s.history||[])].reverse().map(h=>`<li><b>${esc(h.action)}</b>${h.remark?`<div class="small">${esc(h.remark)}</div>`:''}<small>${fmtDT(h.at)} · ${esc(h.by)} (${esc(h.role)})</small></li>`).join('')}</ul></div>
   </div>
-  ${actions.length?`<div class="field" style="margin-top:12px"><label>Remark</label><textarea id="appRemark" placeholder="Required when returning, rejecting, not shortlisting or not approving. The applicant sees this remark."></textarea></div>`:''}
+  ${actions.length?`<div class="field" style="margin-top:12px"><label>Remark</label><textarea id="appRemark" placeholder="Required when returning, rejecting, not shortlisting or not approving. The applicant sees the remark, except when an application is returned to an officer."></textarea></div>`:''}
   </div>${actions.length?`<div class="mf">${actions.join('')}</div>`:''}`,true);
 }
 /** Shows an uploaded document inside the open dialog. The server checks the viewer may see it. */
@@ -1180,9 +1181,10 @@ function viewDoc(docId,type){
 async function markDoc(id,key,status){if(await act('mark_doc',{kind:'student',id,key,status}))openApp(id)}
 async function appAction(id,action){
   const s=S.students[id]; const remark=($('#appRemark')?.value||'').trim();
-  if(['reject','return','notshortlist','notapprove'].includes(action)&&!remark){toast('Add a remark explaining the reason.');$('#appRemark').focus();return}
+  if(['reject','return','returnda','returnsm','notshortlist','notapprove'].includes(action)&&!remark){toast('Add a remark explaining the reason.');$('#appRemark').focus();return}
   if(action==='verify'&&s.docs.some(d=>d.status==='rejected')){toast('A document is marked incorrect. Return the application instead.');return}
-  if(await act('app_action',{id,act:action,remark},'Saved. Applicant notified by SMS'+(s.email?' and email.':'.'))){closeModal();render()}
+  const done={returnda:'Returned to the Dealing Assistant.',returnsm:'Returned to the S&M Officer.'}[action]||'Saved. Applicant notified by SMS'+(s.email?' and email.':'.');
+  if(await act('app_action',{id,act:action,remark},done)){closeModal();render()}
 }
 
 /* ---------- Selected list with Excel and PDF download (CR-06) ---------- */

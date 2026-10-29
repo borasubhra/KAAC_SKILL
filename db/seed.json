@@ -479,7 +479,21 @@
       "selection": "After receiving the applications, shortlisted candidates will be invited for an interview / personality test. Selected candidates may be provided with Training of Trainers (ToT) and certification, subject to the applicable training and certification requirements.",
       "instructions": "In case of any false declaration made by the candidate, the application will be rejected.\nApplications received after the last date shall not be entertained.\nOnly shortlisted candidates will be called for interview, through a notification in the local leading newspapers. No TA/DA will be provided.\nThe undersigned reserves the right to re-schedule or cancel the interview, and to reject any or all applications without assigning any reason.\nCanvassing directly or indirectly shall disqualify a candidate.",
       "lastDate": "2026-11-10",
-      "attachment": "db/seed/trainer-advertisement-2026.pdf",
+      "attachment": "db/seed/trainer-advertisement-2026-v2.pdf",
+      "attachmentName": "Advertisement Notice - Engagement of 40 Trainers.pdf",
+      "replacesAttachmentSha256": [
+        "6857b73cbdac2887d259803dd1d941b9c2724c968cb66d164992fcb165858aa1"
+      ]
+    }
+  ],
+  "notices": [
+    {
+      "id": "NT-trainer-advert-2026",
+      "title": "Advertisement Notice: Engagement of 40 Trainers (last date 10 Nov 2026)",
+      "category": "Advertisement",
+      "date": "2026-10-29",
+      "body": "Applications are invited from candidates of Karbi Anglong and West Karbi Anglong districts for the engagement of 40 Trainers on a contractual, part-time basis. Minimum qualification: Higher Secondary (10+2). Age: 25 to 40 years. Remuneration starts from ₹6,000 per month. Apply online through the Recruitment page of this portal by 10 November 2026. The full advertisement is attached.",
+      "attachment": "db/seed/trainer-advertisement-2026-v2.pdf",
       "attachmentName": "Advertisement Notice - Engagement of 40 Trainers.pdf"
     }
   ]

@@ -68,13 +68,17 @@ function ids_in(array $in, string $key = 'ids'): array {
 const APP_ACTIONS = [
   'verify' => ['dealing', 'submitted', 'verified', 'Documents verified and forwarded to the S&M Officer'],
   'return' => ['dealing', 'submitted', 'returned', 'Returned to the applicant for correction'],
+  'returnda' => ['supervising', 'verified', 'submitted', 'Returned to the Dealing Assistant by the S&M Officer'],
   'reject' => ['dealing', 'submitted', 'rejected', 'Application rejected'],
   'shortlist' => ['supervising', 'verified', 'shortlisted', 'Shortlisted and forwarded to the Joint Secretary'],
   'notshortlist' => ['supervising', 'verified', 'notshortlisted', 'Not shortlisted'],
+  'returnsm' => ['jts', 'shortlisted', 'verified', 'Returned to the S&M Officer by the Joint Secretary'],
   'approve' => ['jts', 'shortlisted', 'approved', 'Approved by the Joint Secretary'],
   'notapprove' => ['jts', 'shortlisted', 'notapproved', 'Not approved by the Joint Secretary'],
 ];
-const REMARK_REQUIRED = ['return', 'reject', 'notshortlist', 'notapprove'];
+const REMARK_REQUIRED = ['return', 'returnda', 'returnsm', 'reject', 'notshortlist', 'notapprove'];
+// Sent back to an earlier officer: the applicant is not notified and does not see the remark.
+const INTERNAL_RETURNS = ['returnda', 'returnsm'];
 
 function app_action_on(array $s, string $act, string $remark): void {
   [$role, $from, $to, $text] = APP_ACTIONS[$act];
@@ -89,6 +93,10 @@ function app_action_on(array $s, string $act, string $remark): void {
   if ($act === 'approve') {
     $patch['skill_id'] = $s['pref1'];
     $patch['approved_at'] = now_iso();
+  }
+  if (in_array($act, INTERNAL_RETURNS, true)) {
+    set_student_status($s, $to, $text, $remark, $patch, null, [], true);
+    return;
   }
   set_student_status($s, $to, $text, $remark, $patch, 'same', $act === 'approve' ? ['subject' => 'You have been selected'] : []);
 }

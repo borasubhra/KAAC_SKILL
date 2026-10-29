@@ -34,6 +34,20 @@ function map_user(array $r): array {
  * $photo: 'inline' sends the thumbnail itself (single-record views such as Track status);
  * 'url' sends a link to it, so staff lists stay small.
  */
+/**
+ * What an applicant may see of their own application. When an officer sends an application back to
+ * an earlier officer, both that return and the forwarding step it undid are left out.
+ */
+function applicant_view(array $student): array {
+  $shown = [];
+  foreach ($student['history'] as $h) {
+    if (empty($h['internal'])) $shown[] = $h;
+    else array_pop($shown);
+  }
+  $student['history'] = $shown;
+  return $student;
+}
+
 function map_student(array $r, string $photo = 'url'): array {
   return [
     'id' => $r['id'], 'name' => $r['name'], 'father' => $r['father'], 'mother' => $r['mother'], 'dob' => $r['dob'],

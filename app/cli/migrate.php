@@ -77,26 +77,54 @@ tx(function () use ($seed) {
 
 if (!is_dir(storage_dir()) && !mkdir(storage_dir(), 0750, true)) { fwrite(STDERR, "[migrate] Cannot create " . storage_dir() . "\n"); exit(1); }
 
+/** Copies a PDF shipped in db/seed into storage and records it. Returns the document ID, or null when the file is missing. */
+function seed_pdf(string $ownerType, string $ownerId, string $key, string $attachment, string $name): ?string {
+  $src = __DIR__ . '/../../' . $attachment;
+  if (!is_file($src)) return null;
+  $docId = $ownerId . '-' . $key . '-' . bin2hex(random_bytes(6));
+  $rel = "$ownerType/$ownerId/$docId.pdf";
+  @mkdir(storage_dir() . "/$ownerType/$ownerId", 0750, true);
+  if (!copy($src, storage_dir() . "/$rel")) throw new RuntimeException("Cannot copy $src");
+  q('INSERT INTO documents(id, owner_type, owner_id, doc_key, name, mime, size, path) VALUES (:id, :t, :o, :k, :n, \'application/pdf\', :s, :p)',
+    [':id' => $docId, ':t' => $ownerType, ':o' => $ownerId, ':k' => $key, ':n' => $name, ':s' => filesize($src), ':p' => $rel]);
+  return $docId;
+}
+
 // Recruitment advertisements published with this version, with their PDF.
 tx(function () use ($seed) {
   foreach ($seed['recruitments'] ?? [] as $r) {
-    if (val('SELECT 1 FROM recruitments WHERE id = :id', [':id' => $r['id']])) continue;
-    $docId = null;
-    $src = __DIR__ . '/../../' . $r['attachment'];
-    if (is_file($src)) {
-      $docId = $r['id'] . '-advert-' . bin2hex(random_bytes(6));
-      $rel = "recruitment/{$r['id']}/$docId.pdf";
-      @mkdir(storage_dir() . "/recruitment/{$r['id']}", 0750, true);
-      if (!copy($src, storage_dir() . "/$rel")) throw new RuntimeException("Cannot copy $src");
-      q("INSERT INTO documents(id, owner_type, owner_id, doc_key, name, mime, size, path) VALUES (:id, 'recruitment', :o, 'advert', :n, 'application/pdf', :s, :p)",
-        [':id' => $docId, ':o' => $r['id'], ':n' => $r['attachmentName'], ':s' => filesize($src), ':p' => $rel]);
+    $have = one('SELECT r.id, d.id AS doc_id, d.path FROM recruitments r LEFT JOIN documents d ON d.id = r.attach_doc_id WHERE r.id = :id', [':id' => $r['id']]);
+    if ($have) {
+      // A revised advertisement replaces the copy published earlier, but never a PDF the department uploaded itself.
+      $old = $have['path'] ? storage_dir() . '/' . $have['path'] : '';
+      if ($have['doc_id'] && is_file($old) && in_array(hash_file('sha256', $old), $r['replacesAttachmentSha256'] ?? [], true)) {
+        $docId = seed_pdf('recruitment', $r['id'], 'advert', $r['attachment'], $r['attachmentName']);
+        if ($docId) {
+          q('UPDATE recruitments SET attach_doc_id = :d, updated_at = now() WHERE id = :id', [':d' => $docId, ':id' => $r['id']]);
+          delete_document($have['doc_id']);
+          say("Updated the advertisement PDF of recruitment {$r['id']}.");
+        }
+      }
+      continue;
     }
+    $docId = seed_pdf('recruitment', $r['id'], 'advert', $r['attachment'], $r['attachmentName']);
     q('INSERT INTO recruitments(id, title, post, vacancies, engagement, description, min_qual, min_age, max_age, remuneration, selection, instructions, last_date, attach_doc_id, created_by)
        VALUES (:id,:t,:post,:v,:e,:d,:q,:mina,:maxa,:rem,:sel,:ins,:ld,:doc,\'System\')', [
       ':id' => $r['id'], ':t' => $r['title'], ':post' => $r['post'], ':v' => $r['vacancies'], ':e' => $r['engagement'], ':d' => $r['description'],
       ':q' => $r['minQual'], ':mina' => $r['minAge'], ':maxa' => $r['maxAge'], ':rem' => $r['remuneration'], ':sel' => $r['selection'],
       ':ins' => $r['instructions'], ':ld' => $r['lastDate'], ':doc' => $docId]);
     say("Published recruitment {$r['id']}: {$r['title']}.");
+  }
+
+  // Notices published with this version. Once added, the department may edit or remove them.
+  foreach ($seed['notices'] ?? [] as $n) {
+    if (val('SELECT 1 FROM notices WHERE id = :id', [':id' => $n['id']]) || val('SELECT 1 FROM audit_log WHERE action = \'seed-notice\' AND target = :id', [':id' => $n['id']])) continue;
+    q("INSERT INTO notices(id, title, category, notice_date, body, created_by) VALUES (:id, :t, :c, :d, :b, 'System')",
+      [':id' => $n['id'], ':t' => $n['title'], ':c' => $n['category'], ':d' => $n['date'], ':b' => $n['body']]);
+    $docId = seed_pdf('notice', $n['id'], 'file', $n['attachment'], $n['attachmentName']);
+    if ($docId) q('UPDATE notices SET attach_doc_id = :d WHERE id = :id', [':d' => $docId, ':id' => $n['id']]);
+    q("INSERT INTO audit_log(action, target) VALUES ('seed-notice', :id)", [':id' => $n['id']]);
+    say("Published notice: {$n['title']}.");
   }
 });
 say('Done.');

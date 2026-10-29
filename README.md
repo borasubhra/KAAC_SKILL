@@ -63,9 +63,11 @@ user `kaac`, password `kaac-local-dev-password` in development). Use pgAdmin, DB
 
 ```
 Student ──► Dealing Assistant ──► S&M Officer ──► Joint Secretary ──► Centre Manager ──► Training Manager
- applies     verifies documents    shortlists       approves            allots centre,     assigns trainer
-             │                                      (bulk email:        forms batches      to each batch
-             └─ returns for re-upload / rejects       "selected")
+ applies     verifies documents    shortlists       final approval      allots centre,     assigns trainer
+    ▲        │          ▲          │       ▲        │ (bulk email:      forms batches      to each batch
+    └────────┘          └──────────┘       └────────┘  "selected")
+   returns for re-upload  returns to the     returns to the
+   (or rejects)           Dealing Assistant  S&M Officer
 ```
 
 | CR | What the portal does |
@@ -73,8 +75,8 @@ Student ──► Dealing Assistant ──► S&M Officer ──► Joint Secret
 | 01 | Students create an account and log in to a dashboard listing the trades. An account is not an application. |
 | 02 | Choosing a trade opens the application form with document upload. On submission the student is emailed the application number plus the message set in **Settings**. |
 | 03 | The **Dealing Assistant** checks every document, then forwards the application to the S&M Officer, returns it for re-upload (the student is emailed and re-uploads from their dashboard), or rejects it. |
-| 04 | **Supervising & Monitoring Officer** is one role and one account. They shortlist eligible candidates and forward them to the Joint Secretary. |
-| 05 | The **Joint Secretary** approves the shortlist — all ticked candidates at once, or one at a time with a remark for those not approved. |
+| 04 | **Supervising & Monitoring Officer** is one role and one account. They shortlist eligible candidates and forward them to the Joint Secretary, or return an application to the Dealing Assistant with a remark. |
+| 05 | The **Joint Secretary** gives the final approval — all ticked candidates at once, or one at a time with a remark for those not approved — or returns an application to the S&M Officer with a remark. Returns between officers are not emailed to the applicant and do not appear in the applicant's progress; the officer who receives one sees it marked **Sent back** with the remark. |
 | 06 | Approved candidates get a "you have been selected" email. The S&M Officer (and Joint Secretary) see the **Selected list** and download it as **Excel** or **PDF** for file noting and newspaper publication. |
 | 07 | The **Centre Manager** sees only selected candidates, allots them to centres offering their trade, and forms batches of one trade: at most 45 (changeable in Settings) and never more than the centre's capacity. |
 | 08 | The **Training Manager** sees only the batches and assigns empanelled trainers. |

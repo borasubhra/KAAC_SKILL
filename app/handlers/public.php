@@ -104,7 +104,7 @@ function h_student_me(array $in): array {
   $ids = array_column($apps, 'id');
   return [
     'me' => $a,
-    'students' => array_map(fn($r) => map_student($r, 'inline'), $apps),
+    'students' => array_map(fn($r) => applicant_view(map_student($r, 'inline')), $apps),
     'batches' => $batchIds ? load_batches('b.id = ANY(:ids)', [':ids' => to_pg_arr($batchIds)]) : [],
     'ojt' => $ids ? array_map('map_ojt', all("SELECT * FROM ojt_letters WHERE student_id = ANY(:ids) AND status = 'signed'", [':ids' => to_pg_arr($ids)])) : [],
   ];
@@ -284,7 +284,7 @@ function track_payload_student(array $row): array {
   $batch = $row['batch_id'] ? load_batches('b.id = :id', [':id' => $row['batch_id']]) : [];
   return [
     'kind' => 'student',
-    'student' => map_student($row, 'inline'),
+    'student' => applicant_view(map_student($row, 'inline')),
     'batches' => $batch,
     'ojt' => array_map('map_ojt', all("SELECT * FROM ojt_letters WHERE student_id = :id AND status = 'signed' ORDER BY created_at", [':id' => $row['id']])),
   ];

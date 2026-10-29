@@ -140,12 +140,25 @@ $r = req('dealing', 'POST', 'bulk_action', ['act' => 'verify', 'ids' => [$sid, $
 check('Dealing Assistant forwards both to the S&M Officer', $r['code'] === 200 && $r['json']['done'] === 2, $r['json']);
 check('a second forward is refused (already moved on)', req('dealing', 'POST', 'app_action', ['id' => $sid, 'act' => 'verify'])['code'] === 409);
 
+echo "Returns between officers\n";
+check('returning to the Dealing Assistant needs a remark', req('sm', 'POST', 'app_action', ['id' => $sid, 'act' => 'returnda'])['code'] === 400);
+check('only the S&M Officer can return to the Dealing Assistant', req('dealing', 'POST', 'app_action', ['id' => $sid, 'act' => 'returnda', 'remark' => 'x'])['code'] === 403);
+check('S&M Officer returns an application to the Dealing Assistant', req('sm', 'POST', 'app_action', ['id' => $sid, 'act' => 'returnda', 'remark' => 'Please re-check the marksheet'])['code'] === 200);
+$r = req('stu', 'GET', 'student_me');
+$mine = array_values(array_filter($r['json']['students'] ?? [], fn($s) => $s['id'] === $sid))[0] ?? [];
+check('the applicant does not see returns between officers', ($mine['status'] ?? '') === 'submitted'
+  && !array_filter($mine['history'] ?? [], fn($h) => str_contains($h['action'], 'Dealing Assistant by') || str_contains($h['remark'], 'marksheet')), $mine['history'] ?? null);
+check('Dealing Assistant forwards it again', req('dealing', 'POST', 'app_action', ['id' => $sid, 'act' => 'verify'])['code'] === 200);
+
 echo "S&M Officer shortlist (CR-04)\n";
 check('the old Monitoring Officer account no longer exists', req('anon', 'POST', 'login', ['u' => 'monitoring', 'p' => 'Monitor@123'])['code'] === 401);
 check('Joint Secretary cannot approve before shortlisting', req('jts', 'POST', 'login', ['u' => 'jtsecy', 'p' => 'Jts@123'])['code'] === 200
   && req('jts', 'POST', 'app_action', ['id' => $sid, 'act' => 'approve'])['code'] === 409);
 $r = req('sm', 'POST', 'bulk_action', ['act' => 'shortlist', 'ids' => [$sid, $sid2]]);
 check('S&M Officer shortlists and forwards to the Joint Secretary', $r['code'] === 200 && $r['json']['done'] === 2, $r['json']);
+check('S&M Officer cannot return to themselves', req('sm', 'POST', 'app_action', ['id' => $sid, 'act' => 'returnsm', 'remark' => 'x'])['code'] === 403);
+check('Joint Secretary returns an application to the S&M Officer', req('jts', 'POST', 'app_action', ['id' => $sid, 'act' => 'returnsm', 'remark' => 'Confirm the age'])['code'] === 200);
+check('S&M Officer forwards it again', req('sm', 'POST', 'app_action', ['id' => $sid, 'act' => 'shortlist'])['code'] === 200);
 
 echo "Joint Secretary approval (CR-05)\n";
 check('not approving needs a remark', req('jts', 'POST', 'app_action', ['id' => $sid2, 'act' => 'notapprove'])['code'] === 400);

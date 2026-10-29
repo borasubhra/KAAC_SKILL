@@ -113,10 +113,10 @@ const STUDENT_PATCH_COLS = ['status', 'skill_id', 'centre_id', 'batch_id', 'scor
  * Applies a status change to a student, appends to the history and logs the notification.
  * $patch uses database column names; arrays are stored as JSON.
  */
-function set_student_status(array $row, string $status, string $action, string $remark = '', array $patch = [], ?string $notifyKey = 'same', array $extra = []): array {
+function set_student_status(array $row, string $status, string $action, string $remark = '', array $patch = [], ?string $notifyKey = 'same', array $extra = [], bool $internal = false): array {
   $me = me();
   $history = jd($row['history'], []);
-  $history[] = history_entry($me, $action, $remark, $row['name']);
+  $history[] = history_entry($me, $action, $remark, $row['name']) + ($internal ? ['internal' => true] : []);
   $patch['status'] = $status;
   $sets = ['history = :history', 'updated_at = now()'];
   $params = [':history' => json_encode($history, JSON_UNESCAPED_UNICODE), ':id' => $row['id']];
