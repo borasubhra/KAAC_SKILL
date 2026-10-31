@@ -1,0 +1,48 @@
+# KAAC SDE portal on shared hosting (cPanel). The application code (app/) and data files (db/) sit in
+# this folder, so everything except the page, its assets and api.php is refused.
+
+Options -Indexes
+DirectoryIndex index.html
+
+# Hidden files (.env, .htaccess, .user.ini), data files and leftover backups are never served.
+<FilesMatch "^\.|\.(sql|json|yml|yaml|md|lock|sh|zip|ini|log|old|bak|tmp)$">
+    Require all denied
+</FilesMatch>
+
+# Only api.php may run as PHP.
+<FilesMatch "\.php$">
+    Require all denied
+</FilesMatch>
+<Files "api.php">
+    Require all granted
+</Files>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^(app|db|tests|docker|cpanel|tools)(/|$) - [F,L]
+</IfModule>
+
+# Upload limits for servers running PHP as an Apache module (others use .user.ini).
+<IfModule mod_php.c>
+    php_value upload_max_filesize 32M
+    php_value post_max_size 64M
+    php_value memory_limit 256M
+    php_value max_execution_time 300
+</IfModule>
+
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "same-origin"
+    Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+    # Scripts, data and documents come only from this server. Inline handlers are still used by the page.
+    Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+
+    # The page, scripts and styles are re-checked on every visit, so an update shows at once.
+    <FilesMatch "\.(html|css|js)$">
+        Header set Cache-Control "no-cache"
+    </FilesMatch>
+    <FilesMatch "\.(png|jpg|svg)$">
+        Header set Cache-Control "public, max-age=3600"
+    </FilesMatch>
+</IfModule>

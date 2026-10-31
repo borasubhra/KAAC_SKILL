@@ -151,6 +151,37 @@ slows down the Joint Secretary's screen. Failed sends are retried up to five tim
   (for example the NIC mail relay or the department's mail server).
 - **Staff area → SMS & email log** shows every message and whether it was sent.
 
+## Run it on shared hosting (cPanel)
+
+The same code also runs on an ordinary web host with PHP 8.3 and PostgreSQL, for example in
+`public_html/skill`. The package keeps the application code next to the page and protects it with
+`.htaccess` files.
+
+1. **Get the package.** Run `sh tools/build-cpanel.sh` to create `dist/kaac-skill-cpanel.zip`
+   (it unzips to a folder called `skill`).
+2. **Upload** the zip with cPanel's File Manager into `public_html` and extract it.
+3. **Create the database** under *PostgreSQL Databases*: a database, a user with a strong password,
+   and give the user all privileges on the database.
+4. **Create a storage folder outside `public_html`** for uploaded documents, e.g. `/home/<user>/kaac-storage`.
+5. **Settings:** copy `skill/.env.example` to `skill/.env` and fill in `APP_ENV=production`, `APP_SECRET`,
+   `DB_HOST` (usually `127.0.0.1`), `DB_PORT` (`5432`), `DB_NAME`, `DB_USER`, `DB_PASS`, `ADMIN_PASSWORD`,
+   `STORAGE_DIR` (the folder from step 4), `COOKIE_PATH=/skill/` and the `SMTP_` settings for email.
+   `.env` is never served to visitors.
+6. **Set up the database:** in cPanel *Terminal* run
+   `cd ~/public_html/skill && php app/cli/migrate.php`. If there is no Terminal, add a cron job with that
+   command, let it run once, then remove it.
+7. **Email:** add a cron job every 5 minutes: `cd ~/public_html/skill && php app/cli/worker.php --once`.
+   Without it, emails are queued but not sent.
+8. Open `https://your-domain/skill/` and log in as `admin`.
+
+**Updating:** build or download the new package, extract it over the old folder (your `.env` is kept,
+since the package only has `.env.example`), then run step 6 again. The migration is safe to repeat; it
+also repairs databases whose automatic ID numbering was lost when tables were copied between servers.
+Delete old copies such as `index.html.old` from the server.
+
+If the `php` command is an older version, use the PHP 8.3 one your host provides
+(e.g. `/usr/local/bin/ea-php83` or `/opt/cpanel/ea-php83/root/usr/bin/php`).
+
 ## How it fits together
 
 ```

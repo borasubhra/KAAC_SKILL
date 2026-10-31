@@ -10,7 +10,7 @@ function start_session(): void {
   if (session_status() === PHP_SESSION_ACTIVE) return;
   session_name('kaac_sess');
   session_set_cookie_params([
-    'lifetime' => 0, 'path' => '/', 'httponly' => true, 'samesite' => 'Strict', 'secure' => is_https(),
+    'lifetime' => 0, 'path' => env('COOKIE_PATH', '/'), 'httponly' => true, 'samesite' => 'Strict', 'secure' => is_https(),
   ]);
   ini_set('session.use_strict_mode', '1');
   ini_set('session.gc_maxlifetime', '28800');

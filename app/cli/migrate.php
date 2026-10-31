@@ -28,6 +28,20 @@ for ($i = 1; ; $i++) {
 db()->exec(file_get_contents(__DIR__ . '/../../db/schema.sql'));
 say('Schema is up to date.');
 
+// Some hosting databases lose the automatic numbering of these ID columns when tables are copied
+// across. Put it back, and keep it ahead of IDs already in use (including any handed out by hand).
+foreach (['applicants', 'notifications', 'audit_log'] as $table) {
+  $seq = "{$table}_id_seq";
+  if (!val("SELECT column_default FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = :t AND column_name = 'id'", [':t' => $table])) {
+    db()->exec("CREATE SEQUENCE IF NOT EXISTS $seq OWNED BY $table.id");
+    db()->exec("ALTER TABLE $table ALTER COLUMN id SET DEFAULT nextval('$seq')");
+    say("Restored automatic numbering of $table.");
+  }
+  $seq = val('SELECT pg_get_serial_sequence(:t, \'id\')', [':t' => $table]) ?: $seq;
+  $max = (int)val("SELECT COALESCE(MAX(id), 0) FROM $table");
+  if ($max > 0 && $max >= (int)val("SELECT last_value FROM $seq")) q('SELECT setval(:s, :n)', [':s' => $seq, ':n' => $max]);
+}
+
 $seed = json_decode(file_get_contents(__DIR__ . '/../../db/seed.json'), true);
 
 tx(function () use ($seed) {
