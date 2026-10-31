@@ -80,7 +80,7 @@ Student ──► Dealing Assistant ──► S&M Officer ──► Joint Secret
 | 06 | Approved candidates get a "you have been selected" email. The S&M Officer (and Joint Secretary) see the **Selected list** and download it as **Excel** or **PDF** for file noting and newspaper publication. |
 | 07 | The **Centre Manager** sees only selected candidates, allots them to centres offering their trade, and forms batches of one trade: at most 45 (changeable in Settings) and never more than the centre's capacity. |
 | 08 | The **Training Manager** sees only the batches and assigns empanelled trainers. |
-| 09 | The **System Administrator** adds existing and upcoming centres with capacity per batch, facilities, nearby town, type (Government institute or Private) and, for Government institutes, the Head of Department. |
+| 09 | The **System Administrator** adds existing and upcoming centres with capacity per batch, facilities, nearby town, type (Government institute or Private) and, for Government institutes, the Head of Department. **Centre Managers** can do the same under **Skill centres**; a manager limited to one centre can edit only that centre. |
 | 10 | The administrator creates accounts for each role. A Centre Manager can cover all centres or be limited to one. |
 
 After a batch is formed the earlier steps continue unchanged: the Centre Manager starts training and records
@@ -112,12 +112,22 @@ automatically, with its PDF, the first time the portal starts.
   process and instructions, the advertisement PDF, and an **Apply online** button. It replaces the old
   "Trainers" tab, since trainers now apply against an advertisement.
 - **Rules applied when a trainer applies:** the minimum qualification, the age range (as on the last date),
-  the documents required by the advertisement (photo, Aadhaar, qualification certificates, tribe/caste
-  certificate, residence proof), and the last date. After the last date the application is refused.
+  the documents required by the advertisement (photo, Aadhaar, certificate of the highest qualification,
+  tribe/caste certificate, residence proof), and the last date. After the last date the application is refused.
+  The form does not ask for skills to teach, preferred centres, an experience certificate or a CV, and the
+  years of experience are optional.
 - **Training Manager → Recruitment:** publish, edit, hide or delete recruitments and attach the advertisement.
   A recruitment that has applications can be hidden but not deleted.
 - **After applying:** trainers go through the same steps as before — the Dealing Assistant verifies documents,
-  and the Training Manager empanels them and assigns them to batches.
+  and the Training Manager empanels them and assigns them to batches. Any empanelled trainer can be assigned;
+  the assignment list shows each trainer's specialisation and experience.
+
+## Acknowledgement
+
+Right after a student application or a trainer application is submitted, the portal shows an
+**acknowledgement slip** (application number, date and time, personal details, course or recruitment applied
+for, documents received) that can be printed or downloaded. It can be opened again later from the student's
+account or from **Track status**. The same acknowledgement is emailed to the applicant.
 
 ## Skill India Digital Hub (SIDH)
 

@@ -60,12 +60,10 @@ const STUDENT_DOCS = [
 const TRAINER_DOCS = [
   'photo' => ['label' => 'Passport-size photograph', 'req' => true, 'img' => true],
   'aadhaar' => ['label' => 'Aadhaar card (copy)', 'req' => true, 'img' => false],
-  'qual' => ['label' => 'Educational qualification certificates (Class X onwards)', 'req' => true, 'img' => false],
+  'qual' => ['label' => 'Certificate of highest educational qualification', 'req' => true, 'img' => false],
   'caste' => ['label' => 'Tribe / caste certificate', 'req' => true, 'img' => false],
   'prc' => ['label' => 'Proof of residence in the KAAC area', 'req' => true, 'img' => false],
-  'exp' => ['label' => 'Experience certificate(s), if any', 'req' => false, 'img' => false],
   'tot' => ['label' => 'Training of Trainers (ToT) certificate', 'req' => false, 'img' => false],
-  'resume' => ['label' => 'Résumé / CV', 'req' => false, 'img' => false],
   'bank' => ['label' => 'Bank passbook first page (for honorarium)', 'req' => false, 'img' => false],
 ];
 

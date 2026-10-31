@@ -192,7 +192,7 @@ function trainer_clash(string $tid, string $start, string $end, ?string $except 
 }
 function eligible_trainer(string $tid, string $courseId): array {
   $t = trainer_row($tid);
-  if ($t['status'] !== 'empanelled' || !in_array($courseId, pg_arr($t['courses']), true)) fail('Only empanelled trainers for this skill can be assigned.');
+  if ($t['status'] !== 'empanelled') fail('Only empanelled trainers can be assigned.');
   return $t;
 }
 

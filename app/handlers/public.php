@@ -226,21 +226,21 @@ function h_trainer_register(array $in): array {
   }
   $qi = array_search(str_in($in, 'qual'), QUALS, true);
   if ($qi !== false && $qi < array_search($rec['min_qual'], QUALS, true)) $p[] = "The minimum qualification for this recruitment is {$rec['min_qual']} pass.";
+  // Experience is optional; when given it must be a sensible number of years.
   foreach (['indExp' => 'industry', 'trnExp' => 'training'] as $k => $label) {
-    $v = $in[$k] ?? '';
-    if (!is_numeric($v) || $v < 0 || $v > 50) $p[] = "Enter $label experience in years (0 if none).";
+    $v = trim((string)($in[$k] ?? ''));
+    if ($v !== '' && (!is_numeric($v) || $v < 0 || $v > 50)) $p[] = "Check the $label experience: enter years between 0 and 50, or leave it blank.";
   }
   if (!valid_sidh_id(str_in($in, 'sidhId', 60))) $p[] = 'Check the Skill India Digital Hub ID: use letters, numbers, / _ . - only, or leave it blank.';
+  // The form no longer asks for skills or preferred centres; the Training Manager matches trainers to batches.
   $skills = array_values(array_unique(array_filter((array)($in['skill'] ?? []), 'is_string')));
-  if (!$skills) $p[] = 'Tick at least one skill you can teach.';
   foreach (TRAINER_DOCS as $k => $t) if ($t['req'] && !upload_in('doc_' . $k)) $p[] = 'Upload ' . mb_strtolower($t['label']) . '.';
   if (empty($in['declare'])) $p[] = 'Tick the declaration to continue.';
   if ($p) fail(implode("\n", $p), 422);
 
   $sectors = [];
   foreach ($skills as $c) $sectors[] = require_course($c)['sector_id'];
-  $pcs = array_values(array_unique(array_filter((array)($in['pc'] ?? []), 'is_string')));
-  foreach ($pcs as $c) optional_centre($c);
+  $pcs = [];
   $hmac = aadhaar_hmac($aadhaar);
   $thumb = thumb_in($in);
 
@@ -261,7 +261,7 @@ function h_trainer_register(array $in): array {
         ':id' => $id, ':name' => $name, ':father' => str_in($in, 'father', 120), ':dob' => str_in($in, 'dob', 10), ':gender' => str_in($in, 'gender'),
         ':l4' => substr($aadhaar, -4), ':hmac' => $hmac, ':mobile' => str_in($in, 'mobile', 10), ':email' => $email,
         ':address' => str_in($in, 'address', 200), ':district' => str_in($in, 'district'), ':pin' => str_in($in, 'pin', 6), ':qual' => str_in($in, 'qual'),
-        ':spec' => str_in($in, 'specialisation', 120), ':ie' => (float)$in['indExp'], ':te' => (float)$in['trnExp'],
+        ':spec' => str_in($in, 'specialisation', 120), ':ie' => (float)($in['indExp'] ?? 0), ':te' => (float)($in['trnExp'] ?? 0),
         ':totno' => str_in($in, 'totNo', 60), ':totbody' => str_in($in, 'totBody', 120), ':courses' => to_pg_arr($skills),
         ':sectors' => to_pg_arr(array_values(array_unique($sectors))), ':pcs' => to_pg_arr($pcs), ':thumb' => $thumb,
         ':docs' => json_encode($docs, JSON_UNESCAPED_UNICODE), ':history' => json_encode($history, JSON_UNESCAPED_UNICODE),

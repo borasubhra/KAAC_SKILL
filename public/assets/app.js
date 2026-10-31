@@ -909,7 +909,7 @@ async function submitApplication(e){
     fd.append('aadhaar',aadhaar); fd.append('declare','1');
     await addFiles(fd,f,DOC_TYPES);
     const d=await api('apply',{method:'POST',form:fd});
-    justApplied=d.student.id; await loadStudent(); go('student');
+    justApplied=d.student.id; await loadStudent(); go('student'); openDoc('ack',d.student.id);
   }catch(ex){showErrors(err,ex.message||'Could not submit. Try again.');btn.disabled=false;btn.textContent='Submit application'}
 }
 
@@ -948,6 +948,7 @@ function trackHTML(s){
       ${b?`<dt>Batch</dt><dd>${esc(b.id)}, ${fmtD(b.start)} to ${fmtD(b.end)}</dd><dt>Centre</dt><dd>${esc(centreName(b.centreId))} (${esc(b.centreId)})</dd>`:''}
       ${s.cert?`<dt>Certificate</dt><dd>${esc(s.cert.no)}</dd>`:''}</dl>
       <div class="row" style="margin-top:16px">
+        <button class="btn" onclick="openDoc('ack','${esc(s.id)}')">Acknowledgement</button>
         ${s.admit?`<button class="btn primary" onclick="openDoc('admit','${esc(s.id)}')">Download admit card</button>`:''}
         ${s.cert?`<button class="btn primary" onclick="openDoc('cert','${esc(s.id)}')">Download certificate</button>`:''}
         ${ojts.map(o=>`<button class="btn" onclick="openDoc('ojt','${esc(o.id)}')">OJT letter: ${esc(o.employer)}</button>`).join('')}
@@ -1030,6 +1031,7 @@ const MENU=[
   ['results','Attendance & results',['centre','training']],
   ['certs','Certificates',['training','centre']],
   ['ojt','OJT letters',['training','centre','jts']],
+  ['centres','Skill centres',['centre']],
   ['mapping','Centre mapping',['centre','training','supervising']],
   ['notifs','SMS & email log',['supervising']],
   ['recruitAdm','Recruitment',['training']],
@@ -1058,7 +1060,7 @@ function pendingCount(v){
 function vStaff(){
   const items=MENU.filter(([k,,r])=>r===null||can(...r));
   if(!items.find(i=>i[0]===staffView)) staffView='dash';
-  const views={recruitAdm:sRecruitAdm,extAdm:sExtAdm,noticesAdm:sNoticesAdm,trainers:sTrainers,dash:sDash,apps:sApps,approved:sApproved,allot:sAllot,batches:sBatches,results:sResults,certs:sCerts,ojt:sOjt,mapping:sMapping,notifs:sNotifs,master:sMaster,users:sUsers,settings:sSettings};
+  const views={recruitAdm:sRecruitAdm,extAdm:sExtAdm,noticesAdm:sNoticesAdm,trainers:sTrainers,dash:sDash,apps:sApps,approved:sApproved,allot:sAllot,batches:sBatches,results:sResults,certs:sCerts,ojt:sOjt,mapping:sMapping,notifs:sNotifs,master:sMaster,centres:sCentres,users:sUsers,settings:sSettings};
   return `<div class="staff"><aside class="side">
     <div class="who"><b>${esc(ME.name)}</b><span class="small muted">${ROLES[ME.role]}${ME.centreId?' · '+esc(centreName(ME.centreId)):''}</span></div>
     ${items.map(([k,l])=>{const n=pendingCount(k);return `<button class="nav" aria-current="${staffView===k}" onclick="staffView='${k}';render()"><span>${l}</span>${n?`<span class="badge">${n}</span>`:''}</button>`}).join('')}
@@ -1376,23 +1378,21 @@ const tStatusTag=s=>`<span class="tag ${TSTATUS[s]?.[1]||''}">${esc(TSTATUS[s]?.
 const TRAINER_DOCS=[
   {key:'photo',label:'Passport-size photograph',req:true,img:true},
   {key:'aadhaar',label:'Aadhaar card (copy)',req:true},
-  {key:'qual',label:'Educational qualification certificates (Class X onwards)',req:true},
+  {key:'qual',label:'Certificate of highest educational qualification',req:true},
   {key:'caste',label:'Tribe / caste certificate',req:true},
   {key:'prc',label:'Proof of residence in the KAAC area',req:true},
-  {key:'exp',label:'Experience certificate(s), if any',req:false},
   {key:'tot',label:'Training of Trainers (ToT) certificate',req:false},
-  {key:'resume',label:'Résumé / CV',req:false},
   {key:'bank',label:'Bank passbook first page (for honorarium)',req:false}
 ];
 const trainerBatches = tid => list('batches').filter(b=>b.trainerId===tid).sort((a,b)=>b.start.localeCompare(a.start));
-const eligibleTrainers = courseId => list('trainers').filter(t=>t.status==='empanelled'&&(t.courses||[]).includes(courseId));
+const eligibleTrainers = () => list('trainers').filter(t=>t.status==='empanelled');
 const trainerClash = (tid,start,end,except) => list('batches').find(b=>b.id!==except&&b.trainerId===tid&&b.status!=='completed'&&b.start<=end&&start<=b.end);
 function trainerLabel(b){const t=S.trainers[b.trainerId];return t?`${esc(t.name)} <span class="muted small">(${esc(t.id)})</span>`:(b.trainer?esc(b.trainer):'<span class="tag warn">Not assigned</span>')}
 
 /* Public registration form */
 /* Trainers apply against an open recruitment advertisement (#trainer/<recruitment ID>). */
 function vTrainerReg(){
-  const centres=list('centres').filter(c=>c.active); const open=openRecruitments();
+  const open=openRecruitments();
   const r=S.recruitments[routeArg]?.open?S.recruitments[routeArg]:(open.length===1?open[0]:null);
   if(!r) return `${pageHead('Trainer application')}${open.length?`<div class="panel"><h3>Choose the recruitment you are applying for</h3>${open.map(x=>`<div class="row" style="justify-content:space-between;padding:8px 0;border-bottom:1px dashed var(--line)"><span><b>${esc(x.title)}</b><span class="small muted"> · last date ${esc(fmtD(x.lastDate))}</span></span><a class="btn sm primary" href="#trainer/${esc(x.id)}">Apply</a></div>`).join('')}</div>`
     :'<div class="panel">Trainer applications are accepted only while a recruitment is open. There is none open right now. See <a href="#recruitment">Recruitment</a> for past and upcoming advertisements.</div>'}`;
@@ -1422,19 +1422,12 @@ function vTrainerReg(){
   <fieldset><legend>Qualification and experience</legend><div class="grid g3">
     <div class="field"><label>Highest qualification <span class="req">*</span></label><select name="qual"><option value="">Select</option>${QUALS.map(q=>`<option>${q}</option>`).join('')}</select></div>
     <div class="field"><label>Subject / trade specialisation <span class="req">*</span></label><input name="specialisation" placeholder="e.g. Computer applications, Hotel management"></div>
-    <div class="field"><label>Industry experience (years) <span class="req">*</span></label><input name="indExp" type="number" min="0" max="50" step="0.5"></div>
-    <div class="field"><label>Training experience (years) <span class="req">*</span></label><input name="trnExp" type="number" min="0" max="50" step="0.5"></div>
+    <div class="field"><label>Industry experience (years)</label><input name="indExp" type="number" min="0" max="50" step="0.5" placeholder="Optional"></div>
+    <div class="field"><label>Training experience (years)</label><input name="trnExp" type="number" min="0" max="50" step="0.5" placeholder="Optional"></div>
     <div class="field"><label>ToT certificate number</label><input name="totNo" placeholder="If certified"></div>
     <div class="field"><label>ToT certifying body</label><input name="totBody" placeholder="e.g. NSDC / Sector Skill Council"></div>
     <div class="field"><label>SIDH trainer ID (if registered)</label><input name="sidhId" maxlength="40" autocomplete="off"><div class="hint">Your trainer ID on ${sidhLink()}</div></div>
   </div></fieldset>
-  <fieldset><legend>Skills you can teach <span class="req">*</span></legend>
-    <p class="small muted">Tick every course you are qualified to train. You are only assigned to batches of these skills.</p>
-    ${list('sectors').map(s=>{const cs=list('courses').filter(c=>c.active&&c.sectorId===s.id);return cs.length?`<div style="margin-bottom:12px"><b class="small">${esc(s.name)}</b><div class="chips" style="margin-top:6px">${cs.map(c=>`<label class="chip" style="font-weight:500"><input type="checkbox" name="skill" value="${c.id}"> ${esc(c.name)}</label>`).join('')}</div></div>`:''}).join('')}
-  </fieldset>
-  <fieldset><legend>Preferred centres</legend>
-    <div class="chips" style="margin-bottom:12px">${centres.map(c=>`<label class="chip" style="font-weight:500"><input type="checkbox" name="pc" value="${c.id}"> ${esc(c.name)}</label>`).join('')}</div>
-  </fieldset>
   <fieldset><legend>Documents</legend>
     <p class="small muted">JPG, PNG or PDF. Photos are resized automatically. PDFs can be up to 2 MB.</p>
     <div class="grid g2">${TRAINER_DOCS.map(d=>`<div class="field"><label>${d.label} ${d.req?'<span class="req">*</span>':''}</label><input type="file" name="doc_${d.key}" accept="${d.img?'image/*':'image/*,application/pdf'}"></div>`).join('')}</div>
@@ -1452,8 +1445,6 @@ function wireTrainer(){
 async function submitTrainer(e){
   e.preventDefault(); const f=e.target, err=$('#trErr'); err.textContent='';
   const v=n=>f.elements[n].value.trim(); const aadhaar=v('aadhaar').replace(/\s/g,'');
-  const skills=[...f.querySelectorAll('[name=skill]:checked')].map(i=>i.value);
-  const pcs=[...f.querySelectorAll('[name=pc]:checked')].map(i=>i.value);
   const p=[];
   if(!validAadhaar(aadhaar)) p.push('Enter a valid 12-digit Aadhaar number (the check digit does not match).');
   if(!/^[6-9]\d{9}$/.test(v('mobile'))) p.push('Enter a valid 10-digit mobile number starting with 6–9.');
@@ -1463,9 +1454,7 @@ async function submitTrainer(e){
   if(v('dob')&&rec){const a=ageOn(v('dob'),rec.lastDate);if(a<rec.minAge||a>rec.maxAge)p.push(`Age must be ${rec.minAge} to ${rec.maxAge} years as on ${fmtD(rec.lastDate)} (yours: ${a}).`)}
   if(v('qual')&&rec&&QUALS.indexOf(v('qual'))<QUALS.indexOf(rec.minQual)) p.push(`The minimum qualification is ${rec.minQual} pass.`);
   if(!/^\d{6}$/.test(v('pin'))) p.push('Enter a 6-digit PIN code.');
-  if(v('indExp')===''||+v('indExp')<0) p.push('Enter industry experience in years (0 if none).');
-  if(v('trnExp')===''||+v('trnExp')<0) p.push('Enter training experience in years (0 if none).');
-  if(!skills.length) p.push('Tick at least one skill you can teach.');
+  [['indExp','industry'],['trnExp','training']].forEach(([n,l])=>{if(v(n)!==''&&(+v(n)<0||+v(n)>50))p.push(`Check the ${l} experience: years between 0 and 50, or leave it blank.`)});
   TRAINER_DOCS.filter(d=>d.req).forEach(d=>{if(!f.elements['doc_'+d.key].files[0])p.push('Upload '+d.label.toLowerCase()+'.')});
   if(!f.elements.declare.checked) p.push('Tick the declaration to continue.');
   if(p.length){showErrors(err,p.join('\n'));return}
@@ -1474,12 +1463,12 @@ async function submitTrainer(e){
     const fd=new FormData();
     ['recruitmentId','mobile','email','name','father','dob','gender','address','district','pin','qual','specialisation','indExp','trnExp','totNo','totBody','sidhId'].forEach(n=>fd.append(n,v(n)));
     fd.append('aadhaar',aadhaar); fd.append('declare','1');
-    skills.forEach(c=>fd.append('skill[]',c)); pcs.forEach(c=>fd.append('pc[]',c));
     await addFiles(fd,f,TRAINER_DOCS);
     const d=await api('trainer_register',{method:'POST',form:fd});
     route='track'; history.replaceState(null,'','#track'); render();
     showTracked(d,v('dob'),true);
-  }catch(ex){showErrors(err,ex.message||'Could not submit. Try again.');btn.disabled=false;btn.textContent='Submit trainer registration'}
+    openDoc('tack',d.trainer.id);
+  }catch(ex){showErrors(err,ex.message||'Could not submit. Try again.');btn.disabled=false;btn.textContent='Submit application'}
 }
 
 /* Trainer status page (via Track application) */
@@ -1487,7 +1476,8 @@ function trainerTrackHTML(t){
   const bs=trainerBatches(t.id);
   return `<div class="grid g2"><div class="panel">
     <div class="row" style="align-items:flex-start">${t.photo?`<img class="photo" src="${esc(t.photo)}" alt="">`:''}<div><h2 style="margin-bottom:4px">${esc(t.name)}</h2><div class="muted small">${esc(t.id)} · Trainer</div><div style="margin-top:8px">${tStatusTag(t.status)}</div></div></div>
-    <hr class="sep"><dl class="kv">${t.recruitmentId?`<dt>Applied for</dt><dd>${esc(S.recruitments[t.recruitmentId]?.title||t.recruitmentId)}</dd>`:''}${t.empanelNo?`<dt>Empanelment no.</dt><dd>${esc(t.empanelNo)}</dd>`:''}<dt>Skills</dt><dd>${(t.courses||[]).map(c=>esc(courseName(c))).join(', ')}</dd><dt>Experience</dt><dd>${t.indExp} yrs industry, ${t.trnExp} yrs training</dd></dl>
+    <hr class="sep"><dl class="kv">${t.recruitmentId?`<dt>Applied for</dt><dd>${esc(S.recruitments[t.recruitmentId]?.title||t.recruitmentId)}</dd>`:''}${t.empanelNo?`<dt>Empanelment no.</dt><dd>${esc(t.empanelNo)}</dd>`:''}<dt>Qualification</dt><dd>${esc(t.qual)}${t.specialisation?' · '+esc(t.specialisation):''}</dd><dt>Experience</dt><dd>${t.indExp} yrs industry, ${t.trnExp} yrs training</dd></dl>
+    <div class="row" style="margin-top:12px"><button class="btn" onclick="openDoc('tack','${esc(t.id)}')">Acknowledgement</button></div>
     ${bs.length?`<h3 style="margin-top:16px">Assigned batches</h3><div class="tw"><table><thead><tr><th>Batch</th><th>Skill</th><th>Centre</th><th>Dates</th><th>Status</th></tr></thead><tbody>${bs.map(b=>`<tr><td class="id">${esc(b.id)}</td><td>${esc(courseName(b.courseId))}</td><td>${esc(centreName(b.centreId))}<div class="small muted">${esc(b.centreId)}</div></td><td class="small">${fmtD(b.start)} – ${fmtD(b.end)}</td><td><span class="tag">${esc(b.status)}</span></td></tr>`).join('')}</tbody></table></div>`:''}
     ${t.status==='returned'?tResubmitHTML(t):''}
   </div>
@@ -1501,12 +1491,11 @@ function tResubmitHTML(t){
   <button class="btn primary">Resubmit registration</button></form>`;
 }
 /* Staff: trainer list, verification and empanelment */
-let trF={status:'',course:'',q:''};
+let trF={status:'',q:''};
 function sTrainers(){
   let ts=list('trainers');
   if(ME.role==='centre'){const mine=new Set(list('batches').filter(b=>inMyCentre(b.centreId)).map(b=>b.trainerId));ts=ts.filter(t=>mine.has(t.id))}
   if(trF.status) ts=ts.filter(t=>t.status===trF.status);
-  if(trF.course) ts=ts.filter(t=>(t.courses||[]).includes(trF.course));
   if(trF.q){const q=trF.q.toLowerCase();ts=ts.filter(t=>(t.id+t.name+t.mobile+t.specialisation).toLowerCase().includes(q))}
   ts.sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
   const hint={dealing:'Open a registration to check documents, then mark it verified, return it for correction or reject it.',training:'Empanel verified trainers. Only empanelled trainers can be assigned to batches.',centre:'Trainers assigned to batches at your centre.'}[ME.role]||'';
@@ -1514,13 +1503,12 @@ function sTrainers(){
   <p class="small muted">Trainers apply online against a <a href="#recruitment">recruitment advertisement</a>, which you publish under Recruitment.</p>
   <div class="row" style="margin-bottom:12px">
     <select style="max-width:200px" onchange="trF.status=this.value;render()"><option value="">All statuses</option>${Object.entries(TSTATUS).map(([k,v])=>`<option value="${k}" ${trF.status===k?'selected':''}>${v[0]}</option>`).join('')}</select>
-    <select style="max-width:260px" onchange="trF.course=this.value;render()"><option value="">All skills</option>${list('courses').map(c=>`<option value="${c.id}" ${trF.course===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select>
     <input style="max-width:240px" placeholder="Search name, ID, mobile" value="${esc(trF.q)}" onchange="trF.q=this.value;render()">
     <span class="muted small" style="margin-left:auto">${ts.length} shown</span>
   </div>
-  <div class="tw"><table><thead><tr><th>Trainer ID</th><th>Name</th><th>Skills</th><th>Experience</th><th>ToT</th><th>Batches</th><th>Status</th><th></th></tr></thead><tbody>
-  ${ts.map(t=>{const cs=(t.courses||[]);const bs=trainerBatches(t.id);const act=bs.filter(b=>b.status!=='completed').length;return `<tr><td class="id">${esc(t.id)}</td><td>${esc(t.name)}<div class="small muted">${esc(t.specialisation)}</div></td>
-    <td class="small">${cs.slice(0,2).map(c=>esc(courseName(c))).join(', ')}${cs.length>2?` +${cs.length-2} more`:''}</td><td class="small">${t.indExp} yrs industry<br>${t.trnExp} yrs training</td>
+  <div class="tw"><table><thead><tr><th>Trainer ID</th><th>Name</th><th>Qualification</th><th>Experience</th><th>ToT</th><th>Batches</th><th>Status</th><th></th></tr></thead><tbody>
+  ${ts.map(t=>{const bs=trainerBatches(t.id);const act=bs.filter(b=>b.status!=='completed').length;return `<tr><td class="id">${esc(t.id)}</td><td>${esc(t.name)}<div class="small muted">${esc(t.specialisation)}</div></td>
+    <td class="small">${esc(t.qual)}</td><td class="small">${t.indExp} yrs industry<br>${t.trnExp} yrs training</td>
     <td>${t.totNo?'<span class="tag ok">Yes</span>':'<span class="tag">No</span>'}</td><td class="small">${act} active<br>${bs.length-act} completed</td><td>${tStatusTag(t.status)}</td><td><button class="btn sm" onclick="openTrainer('${t.id}')">Open</button></td></tr>`}).join('')||'<tr><td colspan="8" class="muted">No trainers match these filters.</td></tr>'}
   </tbody></table></div>`;
 }
@@ -1539,8 +1527,7 @@ function openTrainer(id){
       <dt>ToT certificate</dt><dd>${t.totNo?esc(t.totNo)+(t.totBody?' · '+esc(t.totBody):''):'Not certified'}</dd>
       <dt>SIDH trainer ID</dt><dd>${sidhField('trainer',t.id,t.sidhId,can('dealing','training'))}</dd>
       ${t.empanelNo?`<dt>Empanelment no.</dt><dd>${esc(t.empanelNo)}</dd>`:''}
-      <dt>Skills</dt><dd>${(t.courses||[]).map(c=>`${esc(courseName(c))} <span class="muted small">(${esc(c)})</span>`).join('<br>')}</dd>
-      <dt>Preferred centres</dt><dd>${(t.prefCentres||[]).map(c=>esc(c)).join(', ')||'Any'}</dd></dl>
+      ${(t.courses||[]).length?`<dt>Skills listed</dt><dd>${t.courses.map(c=>`${esc(courseName(c))} <span class="muted small">(${esc(c)})</span>`).join('<br>')}</dd>`:''}</dl>
       ${bs.length?`<h3 style="margin-top:16px">Batches</h3>${bs.map(b=>`<div class="small" style="padding:5px 0;border-bottom:1px dashed var(--line)"><b>${esc(b.id)}</b> · ${esc(courseName(b.courseId))} · ${esc(b.centreId)}<div class="muted">${fmtD(b.start)} – ${fmtD(b.end)} · ${esc(b.status)}</div></div>`).join('')}`:''}
     </div>
     <div><h3>Documents</h3>${(t.docs||[]).map(d=>`<div class="row" style="justify-content:space-between;padding:7px 0;border-bottom:1px dashed var(--line)"><span class="small"><b>${esc(d.label)}</b><br><span class="muted">${esc(d.name)}</span></span>
@@ -1564,15 +1551,15 @@ async function trainerAction(id,action){
 /* Assigning trainers to batches */
 function assignDialog(bid){
   const b=S.batches[bid];
-  const ts=eligibleTrainers(b.courseId).map(t=>({t,clash:trainerClash(t.id,b.start,b.end,bid),pref:(t.prefCentres||[]).includes(b.centreId),active:trainerBatches(t.id).filter(x=>x.status!=='completed').length}))
+  const ts=eligibleTrainers().map(t=>({t,clash:trainerClash(t.id,b.start,b.end,bid),pref:(t.courses||[]).includes(b.courseId),active:trainerBatches(t.id).filter(x=>x.status!=='completed').length}))
     .sort((x,y)=>(!!x.clash-!!y.clash)||(y.pref-x.pref)||(x.active-y.active)||(y.t.trnExp-x.t.trnExp));
   openModal(`<div class="mh"><h3 style="margin:0">${b.trainerId?'Change':'Assign'} trainer · ${esc(b.id)}</h3><button class="btn sm" onclick="closeModal()">Close</button></div>
   <form class="mb" onsubmit="event.preventDefault();assignTrainer('${bid}',this)">
-  <p class="small muted">${esc(courseName(b.courseId))} (${esc(b.courseId)}) at ${esc(centreName(b.centreId))} (${esc(b.centreId)}), ${fmtD(b.start)} – ${fmtD(b.end)}. Only empanelled trainers for this skill are listed. Trainers already teaching another batch on these dates can’t be chosen.</p>
-  ${ts.length?`<div class="tw"><table><thead><tr><th></th><th>Trainer</th><th>Experience</th><th>Prefers this centre</th><th>Active batches</th><th>Availability</th></tr></thead><tbody>
-  ${ts.map(({t,clash,pref,active})=>`<tr><td><input type="radio" name="tid" value="${esc(t.id)}" ${clash?'disabled':''} ${b.trainerId===t.id?'checked':''} aria-label="Choose ${esc(t.name)}"></td><td>${esc(t.name)}<div class="small muted">${esc(t.id)}${t.totNo?' · ToT certified':''}</div></td><td class="small">${t.trnExp} yrs training<br>${t.indExp} yrs industry</td><td>${pref?'<span class="tag ok">Yes</span>':'—'}</td><td>${active}</td>
+  <p class="small muted">${esc(courseName(b.courseId))} (${esc(b.courseId)}) at ${esc(centreName(b.centreId))} (${esc(b.centreId)}), ${fmtD(b.start)} – ${fmtD(b.end)}. All empanelled trainers are listed with their specialisation. Trainers already teaching another batch on these dates can’t be chosen.</p>
+  ${ts.length?`<div class="tw"><table><thead><tr><th></th><th>Trainer</th><th>Experience</th><th>Specialisation</th><th>Active batches</th><th>Availability</th></tr></thead><tbody>
+  ${ts.map(({t,clash,pref,active})=>`<tr><td><input type="radio" name="tid" value="${esc(t.id)}" ${clash?'disabled':''} ${b.trainerId===t.id?'checked':''} aria-label="Choose ${esc(t.name)}"></td><td>${esc(t.name)}<div class="small muted">${esc(t.id)}${t.totNo?' · ToT certified':''}</div></td><td class="small">${t.trnExp} yrs training<br>${t.indExp} yrs industry</td><td class="small">${esc(t.specialisation||'—')}${pref?' <span class="tag ok">Listed this skill</span>':''}</td><td>${active}</td>
     <td class="small">${clash?`<span class="tag bad">Busy</span><div class="muted">${esc(clash.id)} until ${fmtD(clash.end)}</div>`:'<span class="tag ok">Available</span>'}</td></tr>`).join('')}</tbody></table></div>`
-  :'<div class="callout">No empanelled trainer is registered for this skill yet. Empanel a trainer from the Trainers page first.</div>'}
+  :'<div class="callout">No trainer is empanelled yet. Empanel a trainer from the Trainers page first.</div>'}
   <div class="row" style="justify-content:flex-end;margin-top:14px">${b.trainerId?`<button type="button" class="btn danger" onclick="unassignTrainer('${bid}')">Remove current trainer</button>`:''}${ts.length?`<button class="btn primary">Assign and notify trainer</button>`:''}</div></form>`,true);
 }
 async function assignTrainer(bid,f){
@@ -1686,13 +1673,21 @@ function sNotifs(){
 }
 
 /* ---------- Master data (admin) ---------- */
+const centresTable = cs => `<div class="tw"><table><thead><tr><th>Centre ID</th><th>Name</th><th>Type</th><th>Nearby town</th><th>Sectors</th><th>Per batch</th><th>Facilities</th><th>Active</th><th></th></tr></thead><tbody>${[...cs].sort((a,b)=>a.id.localeCompare(b.id)).map(c=>`<tr><td class="id">${esc(c.id)}</td><td>${esc(c.name)}<div class="small muted">${esc(c.address)}, ${esc(c.district)}</div></td><td class="small">${esc(c.type)}${c.hod?`<div class="muted">HoD: ${esc(c.hod)}</div>`:''}</td><td class="small">${esc(c.nearbyTown||'—')}${c.sidhTcId?`<div class="muted">TC ID ${esc(c.sidhTcId)}</div>`:''}</td><td class="small">${c.sectors.map(sectorName).join(', ')}</td><td>${c.capacity}</td><td class="small">${esc(c.facilities||'—')}</td><td>${c.active?'Yes':'No'}</td><td><button class="btn sm" onclick="editRec('centres','${esc(c.id)}')">Edit</button></td></tr>`).join('')}</tbody></table></div>`;
+/** Skill centres page: the administrator and Centre Managers add and edit centres (a one-centre manager edits their own). */
+function sCentres(){
+  const mine=ME.role==='centre'&&ME.centreId; const cs=list('centres').filter(c=>!mine||c.id===ME.centreId);
+  return `<h1>Skill centres</h1><p class="muted">${mine?'Keep the details of your centre up to date: capacity, sectors offered, facilities and contacts.':'Add new skill centres, including upcoming ones, and keep their details up to date.'}</p>
+  <div class="row" style="margin-bottom:14px"><span class="muted small">${cs.length} centre${cs.length===1?'':'s'}</span>${mine?'':`<button class="btn primary" style="margin-left:auto" onclick="editRec('centres')">Add centre</button>`}</div>
+  ${centresTable(cs)}`;
+}
 let masterTab='courses';
 function sMaster(){
   const tabs=[['courses','Courses'],['sectors','Sectors'],['centres','Centres']];
   let body='';
   if(masterTab==='courses') body=`<div class="tw"><table><thead><tr><th>Skill ID</th><th>Course</th><th>Sector</th><th>QP code</th><th>NSQF</th><th>Hours</th><th>Min. qualification</th><th>Age</th><th>Seats</th><th>Active</th><th></th></tr></thead><tbody>${list('courses').sort((a,b)=>a.id.localeCompare(b.id)).map(c=>`<tr><td class="id">${esc(c.id)}</td><td>${esc(c.name)}${c.jobRole&&c.jobRole!==c.name?`<div class="small muted">${esc(c.jobRole)}</div>`:''}</td><td>${esc(sectorName(c.sectorId))}</td><td class="small">${esc(c.qpCode||'—')}</td><td>${c.nsqf}</td><td>${c.hours}</td><td>${esc(c.minQual)}</td><td>${c.minAge}–${c.maxAge}</td><td>${c.seats}</td><td>${c.active?'Yes':'No'}</td><td><button class="btn sm" onclick="editRec('courses','${c.id}')">Edit</button></td></tr>`).join('')}</tbody></table></div>`;
   if(masterTab==='sectors') body=`<div class="tw"><table><thead><tr><th>Sector ID</th><th>Name</th><th>Description</th><th>Courses</th><th></th></tr></thead><tbody>${list('sectors').map(s=>`<tr><td class="id">${esc(s.id)}</td><td>${esc(s.name)}</td><td class="small">${esc(s.desc)}</td><td>${list('courses').filter(c=>c.sectorId===s.id).length}</td><td><button class="btn sm" onclick="editRec('sectors','${s.id}')">Edit</button></td></tr>`).join('')}</tbody></table></div>`;
-  if(masterTab==='centres') body=`<div class="tw"><table><thead><tr><th>Centre ID</th><th>Name</th><th>Type</th><th>Nearby town</th><th>Sectors</th><th>Per batch</th><th>Facilities</th><th>Active</th><th></th></tr></thead><tbody>${list('centres').sort((a,b)=>a.id.localeCompare(b.id)).map(c=>`<tr><td class="id">${esc(c.id)}</td><td>${esc(c.name)}<div class="small muted">${esc(c.address)}, ${esc(c.district)}</div></td><td class="small">${esc(c.type)}${c.hod?`<div class="muted">HoD: ${esc(c.hod)}</div>`:''}</td><td class="small">${esc(c.nearbyTown||'—')}${c.sidhTcId?`<div class="muted">TC ID ${esc(c.sidhTcId)}</div>`:''}</td><td class="small">${c.sectors.map(sectorName).join(', ')}</td><td>${c.capacity}</td><td class="small">${esc(c.facilities||'—')}</td><td>${c.active?'Yes':'No'}</td><td><button class="btn sm" onclick="editRec('centres','${esc(c.id)}')">Edit</button></td></tr>`).join('')}</tbody></table></div>`;
+  if(masterTab==='centres') body=centresTable(list('centres'));
   return `<h1>Courses, sectors & centres</h1>
   <div class="row" style="margin-bottom:14px"><div class="chips">${tabs.map(([k,l])=>`<button class="chip" aria-pressed="${masterTab===k}" onclick="masterTab='${k}';render()">${l}</button>`).join('')}</div>
   <button class="btn primary" style="margin-left:auto" onclick="editRec('${masterTab}')">Add ${masterTab.slice(0,-1)}</button></div>${body}`;
@@ -1870,6 +1865,25 @@ function qrSVG(text){try{const q=qrcode(0,'M');q.addData(text);q.make();return q
 const absUrl = u => new URL(u, location.href).href;
 const docLogo = () => esc(settings().logo || absUrl(LOGO_KAACLOGO));
 function letterhead(){const s=settings();return `<div class="wv"></div><div class="lh"><img src="${docLogo()}" alt="" style="width:62px;height:62px;object-fit:contain;flex:none"><div><b>${esc(s.deptName)}</b><span>${esc(s.council)} · ${esc(s.address)}</span></div></div>`}
+/** Acknowledgement slip for a submitted student application ('ack') or trainer application ('tack'). */
+function docAck(p,trainer){
+  const st=settings(), at=(p.history||[])[0]?.at||p.createdAt;
+  const rec=trainer&&p.recruitmentId?S.recruitments[p.recruitmentId]:null;
+  const row=(k,v)=>`<tr><td class="k">${k}</td><td>${v}</td></tr>`;
+  return `<div class="d">${letterhead()}<div class="ttl">ACKNOWLEDGEMENT — ${trainer?'Trainer application':'Application for skill training'}</div>
+  <div style="display:flex;gap:18px;align-items:flex-start"><table style="flex:1">
+   ${row('Application number',`<b>${esc(p.id)}</b>`)}${row('Submitted on',esc(fmtDT(at)))}
+   ${row('Name',`<b>${esc(p.name)}</b>`)}${row('Father’s / spouse’s name',esc(p.father))}${row('Date of birth',fmtD(p.dob))}${row('Gender',esc(p.gender))}
+   ${row('Aadhaar','XXXX XXXX '+esc(p.aadhaarLast4))}${row('Mobile / email',esc(p.mobile)+(p.email?' · '+esc(p.email):''))}
+   ${row('Address',esc((trainer?[p.address,p.district,p.pin]:[p.village,p.block,p.district,p.pin]).filter(Boolean).join(', ')))}
+   ${trainer?row('Applied for',esc(rec?rec.title:'Trainer empanelment')+(p.recruitmentId?` (${esc(p.recruitmentId)})`:'')):row('Course applied for',`${esc(courseName(p.pref1))} (${esc(p.pref1)})`)}
+   ${row('Highest qualification',esc(p.qual)+(trainer&&p.specialisation?' · '+esc(p.specialisation):''))}
+   ${row('Documents received',(p.docs||[]).map(d=>esc(d.label)).join('<br>')||'—')}</table>
+   <div style="text-align:center;padding-top:14px">${p.photo?`<img src="${esc(p.photo)}" style="width:110px;height:136px;object-fit:cover;border:1px solid #999">`:''}</div></div>
+  <p style="font-size:13px;margin-top:14px">This is to acknowledge that the above ${trainer?'trainer application':'application'} has been received by the ${esc(st.deptName)}, ${esc(st.council)}. Please quote the application number in all correspondence.
+  ${trainer?'Check the status under <b>Track status</b> on the portal with the application number and your date of birth.':'Follow the application by logging in to your account, or under <b>Track status</b> with the application number and your date of birth.'}</p>
+  <p class="small" style="margin-top:18px">This is a computer-generated acknowledgement and does not need a signature. Receipt of an application does not by itself mean that the applicant is eligible or selected.</p></div>`;
+}
 function docAdmit(s){
   return `<div class="d">${letterhead()}<div class="ttl">ADMIT CARD — Aptitude Test &amp; Counselling, ${YEAR}</div>
   <div style="display:flex;gap:18px;align-items:flex-start"><table style="flex:1">
@@ -1918,6 +1932,8 @@ async function openDoc(kind,id,preview){
   if(kind==='admit'){const s=S.students[id];html=docAdmit(s);name=`Admit-card-${s.admit.no}`}
   if(kind==='cert'){const s=S.students[id];html=docCert(s);name=`Certificate-${s.cert.no}`}
   if(kind==='ojt'){const o=S.ojt[id];html=docOjt(o);name=`OJT-letter-${o.letterNo}`}
+  if(kind==='ack'){html=docAck(S.students[id],false);name=`Acknowledgement-${id}`}
+  if(kind==='tack'){html=docAck(S.trainers[id],true);name=`Acknowledgement-${id}`}
   currentDoc={html,name};
   openModal(`<div class="mh"><h3 style="margin:0">${esc(name.replace(/-/g,' ').replace(/^(\w+) (\w+)/,'$1 $2'))}</h3><button class="btn sm" onclick="${preview?`signDialog('${esc(id)}')`:'closeModal()'}">${preview?'Back':'Close'}</button></div>
   <div class="mb"><div class="docpreview"><style>${DOC_CSS}</style>${html}</div></div>

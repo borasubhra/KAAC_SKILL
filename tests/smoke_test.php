@@ -112,6 +112,7 @@ req('sm', 'POST', 'login', ['u' => 'supervising', 'p' => 'Super@123']);
 $notifs = req('sm', 'GET', 'staff_data')['json']['notifs'] ?? [];
 $ack = array_values(array_filter($notifs, fn($n) => $n['channel'] === 'Email' && $n['studentId'] === $sid && $n['event'] === 'submitted'))[0] ?? null;
 check('acknowledgement email carries the application number', $ack && str_contains($ack['body'], $sid) && str_contains($ack['subject'], $sid), $ack);
+check('acknowledgement email lists the course and documents received', $ack && str_contains($ack['body'], 'Course applied for') && str_contains($ack['body'], 'Documents received'), $ack);
 
 echo "Dealing Assistant (CR-03)\n";
 check('staff data needs login', req('anon', 'GET', 'staff_data')['code'] === 401);
@@ -205,7 +206,7 @@ check('the advertisement PDF can be downloaded by anyone', $r['code'] === 200 &&
 $tdocs = fn() => ['photo_thumb' => $thumb, 'doc_photo' => $jpg(), 'doc_aadhaar' => $pdf(), 'doc_qual' => $pdf(), 'doc_caste' => $pdf(), 'doc_prc' => $pdf()];
 $tbase = ['recruitmentId' => 'REC-2026-01', 'mobile' => '9123456780', 'email' => 'trainer@example.com', 'name' => 'Test Trainer', 'father' => 'TF',
   'dob' => '1990-01-01', 'gender' => 'Male', 'address' => 'Diphu', 'district' => 'Karbi Anglong', 'pin' => '782460', 'qual' => 'Graduate',
-  'specialisation' => 'Computer applications', 'indExp' => '5', 'trnExp' => '3', 'skill[0]' => 'SKL-IT-01', 'pc[0]' => 'KAAC-C-005', 'declare' => '1'];
+  'specialisation' => 'Computer applications', 'declare' => '1'];  // no skills, preferred centres or experience: all optional now
 $t = $tbase + $tdocs(); $t['aadhaar'] = aadhaar(); unset($t['recruitmentId']);
 check('trainers must apply against a recruitment', req('anon', 'POST', 'trainer_register', $t, true)['code'] === 400);
 $t = $tbase + $tdocs(); $t['aadhaar'] = aadhaar(); $t['dob'] = '1984-01-01';
@@ -215,6 +216,8 @@ $t = $tbase + $tdocs(); $t['aadhaar'] = aadhaar(); $t['qual'] = 'Class 10';
 check('below Class 12 is refused', req('anon', 'POST', 'trainer_register', $t, true)['code'] === 422);
 $t = $tbase + $tdocs(); $t['aadhaar'] = aadhaar(); unset($t['doc_caste']);
 check('the tribe/caste certificate is required', req('anon', 'POST', 'trainer_register', $t, true)['code'] === 422);
+$t = $tbase + $tdocs(); $t['aadhaar'] = aadhaar(); $t['indExp'] = '80';
+check('experience, when given, must be a sensible number of years', req('anon', 'POST', 'trainer_register', $t, true)['code'] === 422);
 $r = req('training', 'POST', 'save_recruitment', ['title' => 'Old recruitment', 'lastDate' => date('Y-m-d', strtotime('-1 day')), 'minAge' => 21, 'maxAge' => 45, 'minQual' => 'Class 12', 'active' => '1'], true);
 check('Training Manager posts a recruitment', $r['code'] === 200 && str_starts_with($r['json']['id'] ?? '', 'REC-'), $r['json']);
 $old = $r['json']['id'] ?? '';
@@ -226,6 +229,8 @@ $tform = $tbase + $tdocs(); $tform['aadhaar'] = aadhaar();
 $r = req('anon', 'POST', 'trainer_register', $tform, true);
 check('an eligible trainer applies', $r['code'] === 200 && str_starts_with($r['json']['trainer']['id'] ?? '', 'KAAC-SDE-TR-') && $r['json']['trainer']['recruitmentId'] === 'REC-2026-01', $r['json']);
 $tid = $r['json']['trainer']['id'] ?? '';
+$tack = array_values(array_filter(req('sm', 'GET', 'staff_data')['json']['notifs'] ?? [], fn($n) => $n['channel'] === 'Email' && $n['studentId'] === $tid && $n['event'] === 'submitted'))[0] ?? null;
+check('the trainer is emailed an acknowledgement', $tack && str_contains($tack['subject'], 'Acknowledgement') && str_contains($tack['body'], 'Documents received'), $tack);
 check('Dealing Assistant verifies the trainer', req('dealing', 'POST', 'trainer_action', ['id' => $tid, 'act' => 'verify'])['code'] === 200);
 check('Training Manager empanels the trainer', req('training', 'POST', 'trainer_action', ['id' => $tid, 'act' => 'empanel'])['code'] === 200);
 check('a recruitment with applicants cannot be deleted', req('training', 'POST', 'delete_recruitment', ['id' => 'REC-2026-01'])['code'] === 400);
@@ -294,6 +299,16 @@ check('a disabled user is logged out at once', req('newuser', 'GET', 'staff_data
 check('admin creates a Centre Manager for one centre', req('admin', 'POST', 'save_user', ['isNew' => true, 'id' => 'hamren', 'name' => 'Hamren Manager', 'role' => 'centre', 'centreId' => 'KAAC-C-002', 'pw' => 'Str0ngPassword', 'active' => true])['code'] === 200);
 req('hamren', 'POST', 'login', ['u' => 'hamren', 'p' => 'Str0ngPassword']);
 check('a one-centre manager cannot form batches at another centre', req('hamren', 'POST', 'create_batch', ['course' => 'SKL-IT-01', 'centre' => 'KAAC-C-005', 'start' => $start, 'end' => $end, 'ids' => [$sid]])['code'] === 403);
+$c2 = array_values(array_filter(req('anon', 'GET', 'public')['json']['centres'], fn($c) => $c['id'] === 'KAAC-C-002'))[0];
+$c2['facilities'] = 'Computer lab, library';
+check('a Centre Manager edits their own centre', req('hamren', 'POST', 'save_master', ['coll' => 'centres', 'isNew' => false, 'data' => $c2])['code'] === 200);
+$c5 = array_values(array_filter(req('anon', 'GET', 'public')['json']['centres'], fn($c) => $c['id'] === 'KAAC-C-005'))[0];
+check('a one-centre manager cannot edit another centre', req('hamren', 'POST', 'save_master', ['coll' => 'centres', 'isNew' => false, 'data' => $c5])['code'] === 403);
+$new = ['id' => 'KAAC-C-007'] + $centre;
+check('a one-centre manager cannot add centres', req('hamren', 'POST', 'save_master', ['coll' => 'centres', 'isNew' => true, 'data' => $new])['code'] === 403);
+check('a Centre Manager for all centres adds a centre', req('centre', 'POST', 'save_master', ['coll' => 'centres', 'isNew' => true, 'data' => $new])['code'] === 200);
+check('a Centre Manager cannot change courses', req('centre', 'POST', 'save_master', ['coll' => 'courses', 'isNew' => false, 'data' => $course])['code'] === 403);
+check('the Dealing Assistant cannot change centres', req('dealing', 'POST', 'save_master', ['coll' => 'centres', 'isNew' => false, 'data' => $c5])['code'] === 403);
 check('non-admin cannot manage users', req('training', 'POST', 'save_user', ['isNew' => true, 'id' => 'x2', 'name' => 'X', 'role' => 'admin', 'pw' => 'Str0ngPassword1', 'active' => true])['code'] === 403);
 $r = req('training', 'POST', 'save_notice', ['title' => 'Test notice', 'category' => 'Circular', 'date' => date('Y-m-d'), 'body' => 'Body', 'active' => '1', 'file' => $pdf()], true);
 check('Training Manager publishes a notice with attachment', $r['code'] === 200, $r['json']);

@@ -3,9 +3,10 @@
 declare(strict_types=1);
 
 function h_save_master(array $in): array {
-  require_staff();  // administrators only, checked below
-  if (me()['role'] !== 'admin') fail('Only the administrator can change courses, sectors and centres.', 403);
+  $me = require_staff();
   $coll = str_in($in, 'coll');
+  // Centre Managers may add and edit skill centres too; everything else here is for the administrator.
+  if ($me['role'] !== 'admin' && !($me['role'] === 'centre' && $coll === 'centres')) fail('Only the administrator can change courses and sectors.', 403);
   $d = is_array($in['data'] ?? null) ? $in['data'] : [];
   $id = strtoupper(str_in($d, 'id', 40));
   $isNew = !empty($in['isNew']);
@@ -16,6 +17,11 @@ function h_save_master(array $in): array {
   $exists = (bool)val("SELECT 1 FROM $table WHERE id = :id", [':id' => $id]);
   if ($isNew && $exists) fail('That ID already exists.');
   if (!$isNew && !$exists) fail('Record not found.', 404);
+  if ($me['role'] === 'centre' && $me['centreId'] !== '') {
+    // A manager of one centre looks after that centre only.
+    if ($isNew) fail('Only the administrator or a Centre Manager for all centres can add a centre.', 403);
+    if ($id !== $me['centreId']) fail('You manage a different centre.', 403);
+  }
 
   if ($coll === 'sectors') {
     q('INSERT INTO sectors(id, name, descr) VALUES (:id,:n,:d) ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, descr = EXCLUDED.descr',

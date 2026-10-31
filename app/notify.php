@@ -55,13 +55,37 @@ function trainer_message(array $t, string $key, array $x): ?string {
     'submitted' => "Dear $n, your trainer registration {$t['id']} has been received by SDE Dept, KAAC. Track it on the portal with your date of birth.",
     'returned' => "Dear $n, trainer registration {$t['id']} needs correction: " . ($x['remark'] ?: 'see portal') . '. Please re-upload documents on the portal.',
     'verified' => "Dear $n, documents for trainer registration {$t['id']} are verified. Your empanelment is under review.",
-    'empanelled' => "Dear $n, you are empanelled as a trainer of SDE Dept, KAAC (No. {$t['empanelNo']}) for " . count($t['courses']) . ' skill(s). You will be informed when assigned to a batch.',
+    'empanelled' => "Dear $n, you are empanelled as a trainer of SDE Dept, KAAC (No. {$t['empanelNo']}). You will be informed when assigned to a batch.",
     'rejected' => "Dear $n, trainer registration {$t['id']} was not accepted. Reason: " . ($x['remark'] ?: 'see portal') . '.',
     'inactive' => "Dear $n, your trainer empanelment {$t['empanelNo']} is marked inactive. Contact the Training Manager for details.",
     'assigned' => "Dear $n, you are assigned as trainer for batch {$b['id']} (" . course_name($b['courseId']) . ') at ' . centre_name($b['centreId']) . " [{$b['centreId']}], " . fmt_d($b['start']) . ' to ' . fmt_d($b['end']) . '.',
     'released' => "Dear $n, you are no longer assigned to batch {$b['id']}. Contact the Training Manager for details.",
     default => null,
   };
+}
+
+/** Email acknowledgement sent when a student application or trainer application is submitted. */
+function acknowledgement_email(array $p, bool $isTrainer): string {
+  $st = settings_all();
+  if ($isTrainer) {
+    $rec = $p['recruitmentId'] ? one('SELECT title FROM recruitments WHERE id = :id', [':id' => $p['recruitmentId']]) : null;
+    $for = ['Applied for' => ($rec['title'] ?? 'Trainer empanelment') . ($p['recruitmentId'] ? " ({$p['recruitmentId']})" : ''), 'Highest qualification' => $p['qual']];
+  } else {
+    $for = ['Course applied for' => course_name($p['pref1']) . " ({$p['pref1']})", 'Highest qualification' => $p['qual']];
+  }
+  $rows = ['Application number' => $p['id'], 'Submitted on' => date('d M Y, h:i A')] + ['Name' => $p['name'], 'Father’s / spouse’s name' => $p['father'],
+    'Date of birth' => fmt_d($p['dob']), 'Mobile' => $p['mobile'], 'Email' => $p['email']] + $for;
+  $lines = [];
+  foreach ($rows as $k => $v) $lines[] = mb_str_pad($k . ':', 27) . $v;
+  $docs = array_map(fn($d) => '  - ' . $d['label'], $p['docs'] ?? []);
+  $how = $isTrainer
+    ? 'Check the status any time under "Track status" on the portal with this application number and your date of birth.'
+    : 'Follow the application by logging in to your account on the portal, or under "Track status" with this application number and your date of birth.';
+  return "Dear {$p['name']},\n\nThis is to acknowledge that your " . ($isTrainer ? 'trainer application' : 'application for skill training')
+    . ' has been received by the ' . ($st['deptName'] ?? 'Skill Development & Entrepreneurship Department') . ', ' . ($st['council'] ?? 'KAAC') . ".\n\n"
+    . implode("\n", $lines) . "\n\nDocuments received:\n" . ($docs ? implode("\n", $docs) : '  (none)') . "\n\n$how\n"
+    . 'You can also download and print this acknowledgement from the portal. Please quote the application number in all correspondence.'
+    . "\n\nThis is a computer-generated acknowledgement and does not need a signature.";
 }
 
 /** Logs the SMS and queues the email (when the person gave one) for an event. $p is a mapped student or trainer. */
@@ -75,6 +99,10 @@ function notify(array $p, string $key, array $x = []): void {
   if (!empty($p['email'])) {
     $label = ($isTrainer ? TSTATUS_LABELS : STATUS_LABELS)[$key] ?? 'Update';
     $extra = $isTrainer ? '' : email_extra($key);
+    if ($key === 'submitted') {
+      $body = acknowledgement_email($p, $isTrainer);
+      $x['subject'] = "Acknowledgement: application {$p['id']} received";
+    }
     queue_email($p['id'], $p['email'], 'SDE Dept, KAAC: ' . ($x['subject'] ?? $label), $body . ($extra !== '' ? "\n\n$extra" : ''), $key);
   }
 }
